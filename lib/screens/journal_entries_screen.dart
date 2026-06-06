@@ -6,70 +6,313 @@ class JournalEntriesScreen extends StatelessWidget {
 
   Future<void> _addJournalEntry(BuildContext context) async {
     final descriptionController = TextEditingController();
-    final debitController = TextEditingController();
-    final creditController = TextEditingController();
+
+    final accountsSnapshot = await FirebaseFirestore.instance
+        .collection('chart_of_accounts')
+        .orderBy('code')
+        .get();
+
+    final accounts = accountsSnapshot.docs.map((doc) {
+      final data = doc.data();
+
+      return {
+        'id': doc.id,
+        ...data,
+      };
+    }).toList();
+
+    final lines = <Map<String, dynamic>>[];
+
+    void addEmptyLine() {
+      lines.add({
+        'accountCode': '',
+        'accountName': '',
+        'debitController': TextEditingController(text: '0'),
+        'creditController': TextEditingController(text: '0'),
+      });
+    }
+
+    addEmptyLine();
+    addEmptyLine();
+
+    if (!context.mounted) return;
 
     await showDialog(
       context: context,
       builder: (context) {
-        return AlertDialog(
-          title: const Text('إضافة قيد يومية'),
-          content: SingleChildScrollView(
-            child: Column(
-              children: [
-                TextField(
-                  controller: descriptionController,
-                  decoration: const InputDecoration(
-                    labelText: 'وصف القيد',
+        return StatefulBuilder(
+          builder: (context, setState) {
+            double totalDebit = 0;
+            double totalCredit = 0;
+
+            for (final line in lines) {
+              final debitController =
+                  line['debitController'] as TextEditingController;
+              final creditController =
+                  line['creditController'] as TextEditingController;
+
+              totalDebit +=
+                  double.tryParse(debitController.text.trim()) ?? 0;
+              totalCredit +=
+                  double.tryParse(creditController.text.trim()) ?? 0;
+            }
+
+            final isBalanced = totalDebit == totalCredit;
+
+            return AlertDialog(
+              title: const Text('إضافة قيد يومية'),
+              content: SizedBox(
+                width: 700,
+                child: SingleChildScrollView(
+                  child: Column(
+                    children: [
+                      TextField(
+                        controller: descriptionController,
+                        decoration: const InputDecoration(
+                          labelText: 'وصف القيد',
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+
+                      ...lines.asMap().entries.map((entry) {
+                        final index = entry.key;
+                        final line = entry.value;
+
+                        final debitController =
+                            line['debitController'] as TextEditingController;
+                        final creditController =
+                            line['creditController'] as TextEditingController;
+
+                        final selectedAccountCode =
+                            line['accountCode'].toString().isEmpty
+                                ? null
+                                : line['accountCode'].toString();
+
+                        return Card(
+                          margin: const EdgeInsets.symmetric(vertical: 8),
+                          child: Padding(
+                            padding: const EdgeInsets.all(8),
+                            child: Column(
+                              children: [
+                                Row(
+                                  children: [
+                                    Text(
+                                      'سطر ${index + 1}',
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                    const Spacer(),
+                                    IconButton(
+                                      icon: const Icon(Icons.delete),
+                                      onPressed: lines.length <= 2
+                                          ? null
+                                          : () {
+                                              setState(() {
+                                                lines.removeAt(index);
+                                              });
+                                            },
+                                    ),
+                                  ],
+                                ),
+                                DropdownButtonFormField<String>(
+                                  value: selectedAccountCode,
+                                  decoration: const InputDecoration(
+                                    labelText: 'الحساب',
+                                  ),
+                                  items: accounts.map((account) {
+                                    final code =
+                                        account['code'].toString();
+                                    final nameAr =
+                                        account['nameAr'].toString();
+
+                                    return DropdownMenuItem(
+                                      value: code,
+                                      child: Text('$code - $nameAr'),
+                                    );
+                                  }).toList(),
+                                  onChanged: (value) {
+                                    if (value == null) return;
+
+                                    final selectedAccount =
+                                        accounts.firstWhere(
+                                      (account) =>
+                                          account['code'].toString() ==
+                                          value,
+                                    );
+
+                                    setState(() {
+                                      line['accountCode'] = value;
+                                      line['accountName'] =
+                                          selectedAccount['nameAr']
+                                              .toString();
+                                    });
+                                  },
+                                ),
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: TextField(
+                                        controller: debitController,
+                                        decoration: const InputDecoration(
+                                          labelText: 'مدين',
+                                        ),
+                                        keyboardType: TextInputType.number,
+                                        onChanged: (_) {
+                                          setState(() {});
+                                        },
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: TextField(
+                                        controller: creditController,
+                                        decoration: const InputDecoration(
+                                          labelText: 'دائن',
+                                        ),
+                                        keyboardType: TextInputType.number,
+                                        onChanged: (_) {
+                                          setState(() {});
+                                        },
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      }),
+
+                      const SizedBox(height: 8),
+
+                      ElevatedButton.icon(
+                        onPressed: () {
+                          setState(() {
+                            addEmptyLine();
+                          });
+                        },
+                        icon: const Icon(Icons.add),
+                        label: const Text('إضافة سطر'),
+                      ),
+
+                      const SizedBox(height: 16),
+
+                      Text(
+                        'إجمالي المدين: $totalDebit',
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      Text(
+                        'إجمالي الدائن: $totalCredit',
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      Text(
+                        isBalanced ? 'القيد متوازن' : 'القيد غير متوازن',
+                        style: TextStyle(
+                          color: isBalanced ? Colors.green : Colors.red,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-                TextField(
-                  controller: debitController,
-                  decoration: const InputDecoration(
-                    labelText: 'إجمالي المدين',
-                  ),
-                  keyboardType: TextInputType.number,
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('إلغاء'),
                 ),
-                TextField(
-                  controller: creditController,
-                  decoration: const InputDecoration(
-                    labelText: 'إجمالي الدائن',
-                  ),
-                  keyboardType: TextInputType.number,
+                ElevatedButton(
+                  onPressed: () async {
+                    final description =
+                        descriptionController.text.trim();
+
+                    if (description.isEmpty) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('يجب إدخال وصف القيد'),
+                        ),
+                      );
+                      return;
+                    }
+
+                    final savedLines = <Map<String, dynamic>>[];
+
+                    double finalTotalDebit = 0;
+                    double finalTotalCredit = 0;
+
+                    for (final line in lines) {
+                      final accountCode =
+                          line['accountCode'].toString().trim();
+                      final accountName =
+                          line['accountName'].toString().trim();
+
+                      final debitController =
+                          line['debitController'] as TextEditingController;
+                      final creditController =
+                          line['creditController'] as TextEditingController;
+
+                      final debit =
+                          double.tryParse(debitController.text.trim()) ?? 0;
+                      final credit =
+                          double.tryParse(creditController.text.trim()) ?? 0;
+
+                      if (accountCode.isEmpty) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('يجب اختيار حساب لكل سطر'),
+                          ),
+                        );
+                        return;
+                      }
+
+                      if (debit == 0 && credit == 0) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text(
+                              'كل سطر يجب أن يحتوي على مدين أو دائن',
+                            ),
+                          ),
+                        );
+                        return;
+                      }
+
+                      savedLines.add({
+                        'accountCode': accountCode,
+                        'accountName': accountName,
+                        'debit': debit,
+                        'credit': credit,
+                      });
+
+                      finalTotalDebit += debit;
+                      finalTotalCredit += credit;
+                    }
+
+                    await FirebaseFirestore.instance
+                        .collection('journal_entries')
+                        .add({
+                      'date': Timestamp.now(),
+                      'description': description,
+                      'lines': savedLines,
+                      'totalDebit': finalTotalDebit,
+                      'totalCredit': finalTotalCredit,
+                      'isBalanced': finalTotalDebit == finalTotalCredit,
+                      'createdAt': Timestamp.now(),
+                    });
+
+                    if (context.mounted) {
+                      Navigator.pop(context);
+                    }
+                  },
+                  child: const Text('حفظ'),
                 ),
               ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('إلغاء'),
-            ),
-            ElevatedButton(
-              onPressed: () async {
-                final debit =
-                    double.tryParse(debitController.text.trim()) ?? 0;
-                final credit =
-                    double.tryParse(creditController.text.trim()) ?? 0;
-
-                await FirebaseFirestore.instance
-                    .collection('journal_entries')
-                    .add({
-                  'date': Timestamp.now(),
-                  'description': descriptionController.text.trim(),
-                  'totalDebit': debit,
-                  'totalCredit': credit,
-                  'isBalanced': debit == credit,
-                  'createdAt': Timestamp.now(),
-                });
-
-                if (context.mounted) {
-                  Navigator.pop(context);
-                }
-              },
-              child: const Text('حفظ'),
-            ),
-          ],
+            );
+          },
         );
       },
     );
@@ -81,6 +324,52 @@ class JournalEntriesScreen extends StatelessWidget {
     final date = timestamp.toDate();
 
     return '${date.year}-${date.month}-${date.day}';
+  }
+
+  void _showEntryDetails(
+    BuildContext context,
+    Map<String, dynamic> data,
+  ) {
+    final lines = (data['lines'] as List?) ?? [];
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: Text(data['description'] ?? 'تفاصيل القيد'),
+          content: SizedBox(
+            width: 600,
+            child: SingleChildScrollView(
+              child: Column(
+                children: [
+                  if (lines.isEmpty)
+                    const Text('لا توجد تفاصيل لهذا القيد')
+                  else
+                    ...lines.map((line) {
+                      final item = line as Map<String, dynamic>;
+
+                      return ListTile(
+                        title: Text(
+                          '${item['accountCode']} - ${item['accountName']}',
+                        ),
+                        subtitle: Text(
+                          'مدين: ${item['debit']} | دائن: ${item['credit']}',
+                        ),
+                      );
+                    }),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('إغلاق'),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   @override
@@ -131,10 +420,12 @@ class JournalEntriesScreen extends StatelessWidget {
                 final totalCredit = data['totalCredit'] ?? 0;
                 final isBalanced = data['isBalanced'] == true;
                 final date = data['date'] as Timestamp?;
+                final lines = (data['lines'] as List?) ?? [];
 
                 return Card(
                   margin: const EdgeInsets.all(8),
                   child: ListTile(
+                    onTap: () => _showEntryDetails(context, data),
                     leading: Icon(
                       isBalanced ? Icons.check_circle : Icons.error,
                       color: isBalanced ? Colors.green : Colors.red,
@@ -142,7 +433,8 @@ class JournalEntriesScreen extends StatelessWidget {
                     title: Text(description),
                     subtitle: Text(
                       'التاريخ: ${_formatDate(date)}\n'
-                      'مدين: $totalDebit | دائن: $totalCredit',
+                      'مدين: $totalDebit | دائن: $totalCredit\n'
+                      'عدد السطور: ${lines.length}',
                     ),
                     trailing: Text(
                       isBalanced ? 'متوازن' : 'غير متوازن',
