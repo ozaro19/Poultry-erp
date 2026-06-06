@@ -94,18 +94,14 @@ class JournalEntriesScreen extends StatelessWidget {
                           ),
                         ],
                       ),
-
                       const SizedBox(height: 12),
-
                       TextField(
                         controller: descriptionController,
                         decoration: const InputDecoration(
                           labelText: 'وصف القيد',
                         ),
                       ),
-
                       const SizedBox(height: 16),
-
                       ...lines.asMap().entries.map((entry) {
                         final index = entry.key;
                         final line = entry.value;
@@ -210,9 +206,7 @@ class JournalEntriesScreen extends StatelessWidget {
                           ),
                         );
                       }),
-
                       const SizedBox(height: 8),
-
                       ElevatedButton.icon(
                         onPressed: () {
                           setState(() {
@@ -222,9 +216,7 @@ class JournalEntriesScreen extends StatelessWidget {
                         icon: const Icon(Icons.add),
                         label: const Text('إضافة سطر'),
                       ),
-
                       const SizedBox(height: 16),
-
                       Text(
                         'إجمالي المدين: $totalDebit',
                         style: const TextStyle(
@@ -421,17 +413,117 @@ class JournalEntriesScreen extends StatelessWidget {
     }
   }
 
-  void _showEditJournalEntryMessage(
+  Future<void> _editJournalEntryBasic(
     BuildContext context,
-    String entryNo,
-    String description,
-  ) {
-    final title = entryNo.isEmpty ? description : entryNo;
+    String documentId,
+    Map<String, dynamic> data,
+  ) async {
+    final descriptionController = TextEditingController(
+      text: data['description'] ?? '',
+    );
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('تعديل القيد $title'),
-      ),
+    DateTime selectedDate = DateTime.now();
+
+    final currentDate = data['date'];
+
+    if (currentDate is Timestamp) {
+      selectedDate = currentDate.toDate();
+    }
+
+    await showDialog(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return AlertDialog(
+              title: Text(
+                data['entryNo'] == null || data['entryNo'].toString().isEmpty
+                    ? 'تعديل القيد'
+                    : 'تعديل القيد ${data['entryNo']}',
+              ),
+              content: SizedBox(
+                width: 500,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            'تاريخ القيد: ${selectedDate.year}-${selectedDate.month}-${selectedDate.day}',
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                        TextButton(
+                          onPressed: () async {
+                            final pickedDate = await showDatePicker(
+                              context: context,
+                              initialDate: selectedDate,
+                              firstDate: DateTime(2020),
+                              lastDate: DateTime(2100),
+                            );
+
+                            if (pickedDate != null) {
+                              setState(() {
+                                selectedDate = pickedDate;
+                              });
+                            }
+                          },
+                          child: const Text('اختيار التاريخ'),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: descriptionController,
+                      decoration: const InputDecoration(
+                        labelText: 'وصف القيد',
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('إلغاء'),
+                ),
+                ElevatedButton(
+                  onPressed: () async {
+                    final newDescription =
+                        descriptionController.text.trim();
+
+                    if (newDescription.isEmpty) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('يجب إدخال وصف القيد'),
+                        ),
+                      );
+                      return;
+                    }
+
+                    await FirebaseFirestore.instance
+                        .collection('journal_entries')
+                        .doc(documentId)
+                        .update({
+                      'description': newDescription,
+                      'date': Timestamp.fromDate(selectedDate),
+                      'updatedAt': Timestamp.now(),
+                    });
+
+                    if (context.mounted) {
+                      Navigator.pop(context);
+                    }
+                  },
+                  child: const Text('حفظ التعديل'),
+                ),
+              ],
+            );
+          },
+        );
+      },
     );
   }
 
@@ -501,11 +593,8 @@ class JournalEntriesScreen extends StatelessWidget {
                         );
                       }).toList(),
                     ),
-
                   const SizedBox(height: 16),
-
                   const Divider(),
-
                   Row(
                     children: [
                       const Text(
@@ -628,10 +717,10 @@ class JournalEntriesScreen extends StatelessWidget {
                         IconButton(
                           icon: const Icon(Icons.edit),
                           onPressed: () {
-                            _showEditJournalEntryMessage(
+                            _editJournalEntryBasic(
                               context,
-                              entryNo.toString(),
-                              description.toString(),
+                              documentId,
+                              data,
                             );
                           },
                         ),
