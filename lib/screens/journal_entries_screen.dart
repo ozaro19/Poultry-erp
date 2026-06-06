@@ -6,6 +6,7 @@ class JournalEntriesScreen extends StatelessWidget {
 
   Future<void> _addJournalEntry(BuildContext context) async {
     final descriptionController = TextEditingController();
+    DateTime selectedDate = DateTime.now();
 
     final accountsSnapshot = await FirebaseFirestore.instance
         .collection('chart_of_accounts')
@@ -51,10 +52,8 @@ class JournalEntriesScreen extends StatelessWidget {
               final creditController =
                   line['creditController'] as TextEditingController;
 
-              totalDebit +=
-                  double.tryParse(debitController.text.trim()) ?? 0;
-              totalCredit +=
-                  double.tryParse(creditController.text.trim()) ?? 0;
+              totalDebit += double.tryParse(debitController.text.trim()) ?? 0;
+              totalCredit += double.tryParse(creditController.text.trim()) ?? 0;
             }
 
             final isBalanced = totalDebit == totalCredit;
@@ -66,12 +65,45 @@ class JournalEntriesScreen extends StatelessWidget {
                 child: SingleChildScrollView(
                   child: Column(
                     children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              'تاريخ القيد: ${selectedDate.year}-${selectedDate.month}-${selectedDate.day}',
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                          TextButton(
+                            onPressed: () async {
+                              final pickedDate = await showDatePicker(
+                                context: context,
+                                initialDate: selectedDate,
+                                firstDate: DateTime(2020),
+                                lastDate: DateTime(2100),
+                              );
+
+                              if (pickedDate != null) {
+                                setState(() {
+                                  selectedDate = pickedDate;
+                                });
+                              }
+                            },
+                            child: const Text('اختيار التاريخ'),
+                          ),
+                        ],
+                      ),
+
+                      const SizedBox(height: 12),
+
                       TextField(
                         controller: descriptionController,
                         decoration: const InputDecoration(
                           labelText: 'وصف القيد',
                         ),
                       ),
+
                       const SizedBox(height: 16),
 
                       ...lines.asMap().entries.map((entry) {
@@ -121,10 +153,8 @@ class JournalEntriesScreen extends StatelessWidget {
                                     labelText: 'الحساب',
                                   ),
                                   items: accounts.map((account) {
-                                    final code =
-                                        account['code'].toString();
-                                    final nameAr =
-                                        account['nameAr'].toString();
+                                    final code = account['code'].toString();
+                                    final nameAr = account['nameAr'].toString();
 
                                     return DropdownMenuItem(
                                       value: code,
@@ -134,18 +164,15 @@ class JournalEntriesScreen extends StatelessWidget {
                                   onChanged: (value) {
                                     if (value == null) return;
 
-                                    final selectedAccount =
-                                        accounts.firstWhere(
+                                    final selectedAccount = accounts.firstWhere(
                                       (account) =>
-                                          account['code'].toString() ==
-                                          value,
+                                          account['code'].toString() == value,
                                     );
 
                                     setState(() {
                                       line['accountCode'] = value;
                                       line['accountName'] =
-                                          selectedAccount['nameAr']
-                                              .toString();
+                                          selectedAccount['nameAr'].toString();
                                     });
                                   },
                                 ),
@@ -228,8 +255,7 @@ class JournalEntriesScreen extends StatelessWidget {
                 ),
                 ElevatedButton(
                   onPressed: () async {
-                    final description =
-                        descriptionController.text.trim();
+                    final description = descriptionController.text.trim();
 
                     if (description.isEmpty) {
                       ScaffoldMessenger.of(context).showSnackBar(
@@ -291,6 +317,7 @@ class JournalEntriesScreen extends StatelessWidget {
                       finalTotalDebit += debit;
                       finalTotalCredit += credit;
                     }
+
                     if (finalTotalDebit != finalTotalCredit) {
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(
@@ -301,6 +328,7 @@ class JournalEntriesScreen extends StatelessWidget {
                       );
                       return;
                     }
+
                     final counterRef = FirebaseFirestore.instance
                         .collection('counters')
                         .doc('journal_entries');
@@ -320,20 +348,21 @@ class JournalEntriesScreen extends StatelessWidget {
                       'lastNumber': nextNumber,
                     }, SetOptions(merge: true));
 
-                    final entryNo = 'JE-${nextNumber.toString().padLeft(4, '0')}';
+                    final entryNo =
+                        'JE-${nextNumber.toString().padLeft(4, '0')}';
 
-                      await FirebaseFirestore.instance
-                          .collection('journal_entries')
-                          .add({
-                        'entryNo': entryNo,
-                        'date': Timestamp.now(),
-                        'description': description,
-                        'lines': savedLines,
-                        'totalDebit': finalTotalDebit,
-                        'totalCredit': finalTotalCredit,
-                        'isBalanced': finalTotalDebit == finalTotalCredit,
-                        'createdAt': Timestamp.now(),
-                      });
+                    await FirebaseFirestore.instance
+                        .collection('journal_entries')
+                        .add({
+                      'entryNo': entryNo,
+                      'date': Timestamp.fromDate(selectedDate),
+                      'description': description,
+                      'lines': savedLines,
+                      'totalDebit': finalTotalDebit,
+                      'totalCredit': finalTotalCredit,
+                      'isBalanced': finalTotalDebit == finalTotalCredit,
+                      'createdAt': Timestamp.now(),
+                    });
 
                     if (context.mounted) {
                       Navigator.pop(context);
@@ -356,6 +385,7 @@ class JournalEntriesScreen extends StatelessWidget {
 
     return '${date.year}-${date.month}-${date.day}';
   }
+
   Future<void> _deleteJournalEntry(
     BuildContext context,
     String documentId,
@@ -392,114 +422,115 @@ class JournalEntriesScreen extends StatelessWidget {
   }
 
   void _showEntryDetails(
-  BuildContext context,
-  Map<String, dynamic> data,
-) {
-  final lines = (data['lines'] as List?) ?? [];
-  final entryNo = data['entryNo'] ?? '';
-  final description = data['description'] ?? 'تفاصيل القيد';
-  final totalDebit = data['totalDebit'] ?? 0;
-  final totalCredit = data['totalCredit'] ?? 0;
+    BuildContext context,
+    Map<String, dynamic> data,
+  ) {
+    final lines = (data['lines'] as List?) ?? [];
+    final entryNo = data['entryNo'] ?? '';
+    final description = data['description'] ?? 'تفاصيل القيد';
+    final totalDebit = data['totalDebit'] ?? 0;
+    final totalCredit = data['totalCredit'] ?? 0;
 
-  showDialog(
-    context: context,
-    builder: (context) {
-      return AlertDialog(
-        title: Text(
-          entryNo.toString().isEmpty
-              ? description
-              : '$entryNo - $description',
-        ),
-        content: SizedBox(
-          width: 750,
-          child: SingleChildScrollView(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                if (lines.isEmpty)
-                  const Text('لا توجد تفاصيل لهذا القيد')
-                else
-                  DataTable(
-                    columns: const [
-                      DataColumn(
-                        label: Text('الحساب'),
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: Text(
+            entryNo.toString().isEmpty
+                ? description
+                : '$entryNo - $description',
+          ),
+          content: SizedBox(
+            width: 750,
+            child: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  if (lines.isEmpty)
+                    const Text('لا توجد تفاصيل لهذا القيد')
+                  else
+                    DataTable(
+                      columns: const [
+                        DataColumn(
+                          label: Text('الحساب'),
+                        ),
+                        DataColumn(
+                          label: Text('مدين'),
+                          numeric: true,
+                        ),
+                        DataColumn(
+                          label: Text('دائن'),
+                          numeric: true,
+                        ),
+                      ],
+                      rows: lines.map((line) {
+                        final item = line as Map<String, dynamic>;
+
+                        return DataRow(
+                          cells: [
+                            DataCell(
+                              Text(
+                                '${item['accountCode']} - ${item['accountName']}',
+                              ),
+                            ),
+                            DataCell(
+                              Text(
+                                item['debit'].toString(),
+                              ),
+                            ),
+                            DataCell(
+                              Text(
+                                item['credit'].toString(),
+                              ),
+                            ),
+                          ],
+                        );
+                      }).toList(),
+                    ),
+
+                  const SizedBox(height: 16),
+
+                  const Divider(),
+
+                  Row(
+                    children: [
+                      const Text(
+                        'الإجمالي',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
-                      DataColumn(
-                        label: Text('مدين'),
-                        numeric: true,
+                      const Spacer(),
+                      Text(
+                        'مدين: $totalDebit',
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
-                      DataColumn(
-                        label: Text('دائن'),
-                        numeric: true,
+                      const SizedBox(width: 20),
+                      Text(
+                        'دائن: $totalCredit',
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                     ],
-                    rows: lines.map((line) {
-                      final item = line as Map<String, dynamic>;
-
-                      return DataRow(
-                        cells: [
-                          DataCell(
-                            Text(
-                              '${item['accountCode']} - ${item['accountName']}',
-                            ),
-                          ),
-                          DataCell(
-                            Text(
-                              item['debit'].toString(),
-                            ),
-                          ),
-                          DataCell(
-                            Text(
-                              item['credit'].toString(),
-                            ),
-                          ),
-                        ],
-                      );
-                    }).toList(),
                   ),
-
-                const SizedBox(height: 16),
-
-                const Divider(),
-
-                Row(
-                  children: [
-                    const Text(
-                      'الإجمالي',
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const Spacer(),
-                    Text(
-                      'مدين: $totalDebit',
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(width: 20),
-                    Text(
-                      'دائن: $totalCredit',
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
+                ],
+              ),
             ),
           ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('إغلاق'),
-          ),
-        ],
-      );
-    },
-  );
-}
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('إغلاق'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Directionality(
@@ -543,7 +574,7 @@ class JournalEntriesScreen extends StatelessWidget {
               itemBuilder: (context, index) {
                 final data = docs[index].data() as Map<String, dynamic>;
                 final documentId = docs[index].id;
-                
+
                 final description = data['description'] ?? '';
                 final entryNo = data['entryNo'] ?? '';
                 final totalDebit = data['totalDebit'] ?? 0;
