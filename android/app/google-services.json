@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "190804428130",
+    "project_id": "poultryerp-2af23",
+    "storage_bucket": "poultryerp-2af23.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:190804428130:android:e58ef6a0ae9f53fcc8583b",
+        "android_client_info": {
+          "package_name": "com.example.poultry_erp"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAM8KZ86wE_LYsd8LfczNDYWsmO_Gq4kT8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
