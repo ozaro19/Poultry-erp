@@ -1,10 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-class AccountsScreen extends StatelessWidget {
+class AccountsScreen extends StatefulWidget {
   const AccountsScreen({super.key});
 
- Future<void> _addAccount(BuildContext context) async {
+  @override
+  State<AccountsScreen> createState() => _AccountsScreenState();
+}
+
+class _AccountsScreenState extends State<AccountsScreen> {
+  String searchQuery = '';
+
+  Future<void> _addAccount(BuildContext context) async {
   final codeController = TextEditingController();
   final nameArController = TextEditingController();
   final nameEnController = TextEditingController();
@@ -388,7 +395,7 @@ class AccountsScreen extends StatelessWidget {
     );
   }
 
-  @override
+    @override
   Widget build(BuildContext context) {
     return Directionality(
       textDirection: TextDirection.rtl,
@@ -400,68 +407,104 @@ class AccountsScreen extends StatelessWidget {
           onPressed: () => _addAccount(context),
           child: const Icon(Icons.add),
         ),
-        body: StreamBuilder<QuerySnapshot>(
-          stream: FirebaseFirestore.instance
-              .collection('chart_of_accounts')
-              .orderBy('code')
-              .snapshots(),
-          builder: (context, snapshot) {
-            if (snapshot.hasError) {
-              return const Center(
-                child: Text('حدث خطأ'),
-              );
-            }
+        body: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(12),
+              child: TextField(
+                decoration: const InputDecoration(
+                  labelText: 'ابحث بالكود أو الاسم',
+                  prefixIcon: Icon(Icons.search),
+                  border: OutlineInputBorder(),
+                ),
+                onChanged: (value) {
+                  setState(() {
+                    searchQuery = value.trim().toLowerCase();
+                  });
+                },
+              ),
+            ),
+            Expanded(
+              child: StreamBuilder<QuerySnapshot>(
+                stream: FirebaseFirestore.instance
+                    .collection('chart_of_accounts')
+                    .orderBy('code')
+                    .snapshots(),
+                builder: (context, snapshot) {
+                  if (snapshot.hasError) {
+                    return const Center(
+                      child: Text('حدث خطأ'),
+                    );
+                  }
 
-            if (!snapshot.hasData) {
-              return const Center(
-                child: CircularProgressIndicator(),
-              );
-            }
+                  if (!snapshot.hasData) {
+                    return const Center(
+                      child: CircularProgressIndicator(),
+                    );
+                  }
 
-            final docs = snapshot.data!.docs;
+                  final docs = snapshot.data!.docs;
 
-            final accounts = docs.map((doc) {
-              final data = doc.data() as Map<String, dynamic>;
+                  final accounts = docs.map((doc) {
+                    final data = doc.data() as Map<String, dynamic>;
 
-              return {
-                'id': doc.id,
-                ...data,
-              };
-            }).toList();
+                    return {
+                      'id': doc.id,
+                      ...data,
+                    };
+                  }).toList();
 
-            accounts.sort(
-              (a, b) => a['code'].toString().compareTo(
-                    b['code'].toString(),
-                  ),
-            );
+                  accounts.sort(
+                    (a, b) => a['code'].toString().compareTo(
+                          b['code'].toString(),
+                        ),
+                  );
 
-            final allCodes = accounts
-                .map(
-                  (account) => account['code'].toString(),
-                )
-                .toSet();
+                  final filteredAccounts = searchQuery.isEmpty
+                      ? accounts
+                      : accounts.where((account) {
+                          final code =
+                              account['code'].toString().toLowerCase();
+                          final nameAr =
+                              account['nameAr'].toString().toLowerCase();
+                          final nameEn =
+                              account['nameEn'].toString().toLowerCase();
 
-            final rootAccounts = accounts.where((account) {
-              final parentCode =
-                  (account['parentCode'] ?? '').toString().trim();
+                          return code.contains(searchQuery) ||
+                              nameAr.contains(searchQuery) ||
+                              nameEn.contains(searchQuery);
+                        }).toList();
 
-              return parentCode.isEmpty ||
-                  parentCode == 'root' ||
-                  !allCodes.contains(parentCode);
-            }).toList();
+                  final allCodes = filteredAccounts
+                      .map(
+                        (account) => account['code'].toString(),
+                      )
+                      .toSet();
 
-            return ListView(
-              children: rootAccounts
-                  .map(
-                    (account) => _buildAccountTreeNode(
-                      context,
-                      account,
-                      accounts,
-                    ),
-                  )
-                  .toList(),
-            );
-          },
+                  final rootAccounts = filteredAccounts.where((account) {
+                    final parentCode =
+                        (account['parentCode'] ?? '').toString().trim();
+
+                    return parentCode.isEmpty ||
+                        parentCode == 'root' ||
+                        !allCodes.contains(parentCode);
+                  }).toList();
+
+                  return ListView(
+                    children: rootAccounts
+                        .map(
+                          (account) => _buildAccountTreeNode(
+                            context,
+                            account,
+                            filteredAccounts,
+                          ),
+                        )
+                        .toList(),
+                  );
+                },
+              ),
+            ),
+          ],
         ),
       ),
     );
