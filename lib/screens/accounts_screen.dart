@@ -4,107 +4,176 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 class AccountsScreen extends StatelessWidget {
   const AccountsScreen({super.key});
 
-  Future<void> _addAccount(BuildContext context) async {
-    final codeController = TextEditingController();
-    final nameArController = TextEditingController();
-    final nameEnController = TextEditingController();
-    final parentController = TextEditingController();
-    final levelController = TextEditingController();
+ Future<void> _addAccount(BuildContext context) async {
+  final codeController = TextEditingController();
+  final nameArController = TextEditingController();
+  final nameEnController = TextEditingController();
+  final levelController = TextEditingController(text: '1');
 
-    await showDialog(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text('إضافة حساب جديد'),
-          content: SingleChildScrollView(
-            child: Column(
-              children: [
-                TextField(
-                  controller: codeController,
-                  decoration: const InputDecoration(
-                    labelText: 'كود الحساب',
+  String selectedParentCode = 'root';
+
+  final accountsSnapshot = await FirebaseFirestore.instance
+      .collection('chart_of_accounts')
+      .orderBy('code')
+      .get();
+
+  final accounts = accountsSnapshot.docs.map((doc) {
+    final data = doc.data();
+
+    return {
+      'id': doc.id,
+      ...data,
+    };
+  }).toList();
+
+  if (!context.mounted) return;
+
+  await showDialog(
+    context: context,
+    builder: (context) {
+      return StatefulBuilder(
+        builder: (context, setState) {
+          return AlertDialog(
+            title: const Text('إضافة حساب جديد'),
+            content: SingleChildScrollView(
+              child: Column(
+                children: [
+                  TextField(
+                    controller: codeController,
+                    decoration: const InputDecoration(
+                      labelText: 'كود الحساب',
+                    ),
                   ),
-                ),
-                TextField(
-                  controller: nameArController,
-                  decoration: const InputDecoration(
-                    labelText: 'الاسم بالعربية',
+                  TextField(
+                    controller: nameArController,
+                    decoration: const InputDecoration(
+                      labelText: 'الاسم بالعربية',
+                    ),
                   ),
-                ),
-                TextField(
-                  controller: nameEnController,
-                  decoration: const InputDecoration(
-                    labelText: 'الاسم بالإنجليزية',
+                  TextField(
+                    controller: nameEnController,
+                    decoration: const InputDecoration(
+                      labelText: 'الاسم بالإنجليزية',
+                    ),
                   ),
-                ),
-                TextField(
-                  controller: parentController,
-                  decoration: const InputDecoration(
-                    labelText: 'كود الحساب الأب',
-                    hintText: 'مثال: 1000 أو root',
+
+                  DropdownButtonFormField<String>(
+                    value: selectedParentCode,
+                    decoration: const InputDecoration(
+                      labelText: 'الحساب الأب',
+                    ),
+                    items: [
+                      const DropdownMenuItem(
+                        value: 'root',
+                        child: Text('root - حساب رئيسي'),
+                      ),
+                      ...accounts.map((account) {
+                        final code = account['code'].toString();
+                        final nameAr = account['nameAr'].toString();
+
+                        return DropdownMenuItem(
+                          value: code,
+                          child: Text('$code - $nameAr'),
+                        );
+                      }),
+                    ],
+                    onChanged: (value) {
+                      if (value == null) return;
+
+                      setState(() {
+                        selectedParentCode = value;
+
+                        if (value == 'root') {
+                          levelController.text = '1';
+                        } else {
+                          final parentAccount = accounts.firstWhere(
+                            (account) =>
+                                account['code'].toString() == value,
+                          );
+
+                          final parentLevel = int.tryParse(
+                                parentAccount['level'].toString(),
+                              ) ??
+                              1;
+
+                          levelController.text =
+                              (parentLevel + 1).toString();
+                        }
+                      });
+                    },
                   ),
-                ),
-                TextField(
-                  controller: levelController,
-                  decoration: const InputDecoration(
-                    labelText: 'المستوى',
+
+                  TextField(
+                    controller: levelController,
+                    decoration: const InputDecoration(
+                      labelText: 'المستوى',
+                    ),
+                    keyboardType: TextInputType.number,
+                    readOnly: true,
                   ),
-                  keyboardType: TextInputType.number,
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('إلغاء'),
-            ),
-            ElevatedButton(
-              onPressed: () async {
-                final code = codeController.text.trim();
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('إلغاء'),
+              ),
+              ElevatedButton(
+                onPressed: () async {
+                  final code = codeController.text.trim();
 
-                final existingAccount = await FirebaseFirestore.instance
-                    .collection('chart_of_accounts')
-                    .where(
-                      'code',
-                      isEqualTo: code,
-                    )
-                    .get();
-
-                if (existingAccount.docs.isNotEmpty) {
-                  if (context.mounted) {
+                  if (code.isEmpty) {
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(
-                        content: Text('كود الحساب موجود بالفعل'),
+                        content: Text('يجب إدخال كود الحساب'),
                       ),
                     );
+                    return;
                   }
-                  return;
-                }
 
-                await FirebaseFirestore.instance
-                    .collection('chart_of_accounts')
-                    .add({
-                  'code': code,
-                  'nameAr': nameArController.text.trim(),
-                  'nameEn': nameEnController.text.trim(),
-                  'parentCode': parentController.text.trim().isEmpty
-                      ? 'root'
-                      : parentController.text.trim(),
-                  'level': int.tryParse(levelController.text.trim()) ?? 1,
-                });
+                  final existingAccount = await FirebaseFirestore.instance
+                      .collection('chart_of_accounts')
+                      .where(
+                        'code',
+                        isEqualTo: code,
+                      )
+                      .get();
 
-                if (context.mounted) {
-                  Navigator.pop(context);
-                }
-              },
-              child: const Text('حفظ'),
-            ),
-          ],
-        );
-      },
-    );
-  }
+                  if (existingAccount.docs.isNotEmpty) {
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('كود الحساب موجود بالفعل'),
+                        ),
+                      );
+                    }
+                    return;
+                  }
+
+                  await FirebaseFirestore.instance
+                      .collection('chart_of_accounts')
+                      .add({
+                    'code': code,
+                    'nameAr': nameArController.text.trim(),
+                    'nameEn': nameEnController.text.trim(),
+                    'parentCode': selectedParentCode,
+                    'level': int.tryParse(levelController.text.trim()) ?? 1,
+                  });
+
+                  if (context.mounted) {
+                    Navigator.pop(context);
+                  }
+                },
+                child: const Text('حفظ'),
+              ),
+            ],
+          );
+        },
+      );
+    },
+  );
+}
 
   Future<void> _editAccount(
     BuildContext context,
@@ -234,10 +303,11 @@ class AccountsScreen extends StatelessWidget {
     final level = int.tryParse(account['level'].toString()) ?? 1;
 
     final children = allAccounts
-        .where(
-          (child) => child['parentCode'].toString() == code,
-        )
-        .toList();
+    .where(
+      (child) =>
+          child['parentCode'].toString().trim() == code.trim(),
+    )
+    .toList();
 
     children.sort(
       (a, b) => a['code'].toString().compareTo(
