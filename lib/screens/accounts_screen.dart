@@ -40,7 +40,8 @@ class AccountsScreen extends StatelessWidget {
                 TextField(
                   controller: parentController,
                   decoration: const InputDecoration(
-                    labelText: 'الحساب الأب',
+                    labelText: 'كود الحساب الأب',
+                    hintText: 'مثال: 1000 أو root',
                   ),
                 ),
                 TextField(
@@ -60,40 +61,42 @@ class AccountsScreen extends StatelessWidget {
             ),
             ElevatedButton(
               onPressed: () async {
-                final existingAccount =
-                    await FirebaseFirestore.instance
-                        .collection('chart_of_accounts')
-                        .where(
-                          'code',
-                          isEqualTo: codeController.text,
-                        )
-                        .get();
+                final code = codeController.text.trim();
+
+                final existingAccount = await FirebaseFirestore.instance
+                    .collection('chart_of_accounts')
+                    .where(
+                      'code',
+                      isEqualTo: code,
+                    )
+                    .get();
 
                 if (existingAccount.docs.isNotEmpty) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text(
-                        'كود الحساب موجود بالفعل',
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('كود الحساب موجود بالفعل'),
                       ),
-                    ),
-                  );
+                    );
+                  }
                   return;
                 }
 
                 await FirebaseFirestore.instance
                     .collection('chart_of_accounts')
                     .add({
-                  'code': codeController.text,
-                  'nameAr': nameArController.text,
-                  'nameEn': nameEnController.text,
-                  'parentCode': parentController.text,
-                  'level': int.tryParse(
-                        levelController.text,
-                      ) ??
-                      1,
+                  'code': code,
+                  'nameAr': nameArController.text.trim(),
+                  'nameEn': nameEnController.text.trim(),
+                  'parentCode': parentController.text.trim().isEmpty
+                      ? 'root'
+                      : parentController.text.trim(),
+                  'level': int.tryParse(levelController.text.trim()) ?? 1,
                 });
 
-                Navigator.pop(context);
+                if (context.mounted) {
+                  Navigator.pop(context);
+                }
               },
               child: const Text('حفظ'),
             ),
@@ -147,11 +150,13 @@ class AccountsScreen extends StatelessWidget {
                     .collection('chart_of_accounts')
                     .doc(documentId)
                     .update({
-                  'nameAr': nameArController.text,
-                  'nameEn': nameEnController.text,
+                  'nameAr': nameArController.text.trim(),
+                  'nameEn': nameEnController.text.trim(),
                 });
 
-                Navigator.pop(context);
+                if (context.mounted) {
+                  Navigator.pop(context);
+                }
               },
               child: const Text('حفظ'),
             ),
@@ -160,35 +165,36 @@ class AccountsScreen extends StatelessWidget {
       },
     );
   }
-Future<void> _deleteAccount(
-  BuildContext context,
-  String documentId,
-  String accountCode,
-) async {
-  final result = await showDialog<bool>(
-    context: context,
-    builder: (context) {
-      return AlertDialog(
-        title: const Text('تأكيد الحذف'),
-        content: Text(
-          'هل تريد حذف الحساب $accountCode ؟',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('إلغاء'),
+
+  Future<void> _deleteAccount(
+    BuildContext context,
+    String documentId,
+    String accountCode,
+  ) async {
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('تأكيد الحذف'),
+          content: Text(
+            'هل تريد حذف الحساب $accountCode ؟',
           ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('حذف'),
-          ),
-        ],
-      );
-    },
-  );
-  if (result == true) {
-    final children =
-      await FirebaseFirestore.instance
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('إلغاء'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('حذف'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (result == true) {
+      final children = await FirebaseFirestore.instance
           .collection('chart_of_accounts')
           .where(
             'parentCode',
@@ -196,108 +202,197 @@ Future<void> _deleteAccount(
           )
           .get();
 
-    if (children.docs.isNotEmpty) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'لا يمكن حذف الحساب لأنه يحتوي على حسابات فرعية',
+      if (children.docs.isNotEmpty) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'لا يمكن حذف الحساب لأنه يحتوي على حسابات فرعية',
+              ),
+            ),
+          );
+        }
+        return;
+      }
+
+      await FirebaseFirestore.instance
+          .collection('chart_of_accounts')
+          .doc(documentId)
+          .delete();
+    }
+  }
+
+  Widget _buildAccountTreeNode(
+    BuildContext context,
+    Map<String, dynamic> account,
+    List<Map<String, dynamic>> allAccounts,
+  ) {
+    final documentId = account['id'].toString();
+    final code = account['code'].toString();
+    final nameAr = account['nameAr'].toString();
+    final nameEn = account['nameEn'].toString();
+    final level = int.tryParse(account['level'].toString()) ?? 1;
+
+    final children = allAccounts
+        .where(
+          (child) => child['parentCode'].toString() == code,
+        )
+        .toList();
+
+    children.sort(
+      (a, b) => a['code'].toString().compareTo(
+            b['code'].toString(),
+          ),
+    );
+
+    final titleRow = Row(
+      children: [
+        Expanded(
+          child: Text(
+            '$code - $nameAr',
+            style: TextStyle(
+              fontWeight:
+                  children.isNotEmpty ? FontWeight.bold : FontWeight.normal,
             ),
           ),
-        );
-      }
-      return;
+        ),
+        IconButton(
+          icon: const Icon(Icons.edit),
+          onPressed: () {
+            _editAccount(
+              context,
+              documentId,
+              account,
+            );
+          },
+        ),
+        IconButton(
+          icon: const Icon(Icons.delete),
+          onPressed: () {
+            _deleteAccount(
+              context,
+              documentId,
+              code,
+            );
+          },
+        ),
+      ],
+    );
+
+    if (children.isNotEmpty) {
+      return Padding(
+        padding: EdgeInsets.only(
+          right: (level - 1) * 20.0,
+        ),
+        child: ExpansionTile(
+          initiallyExpanded: level == 1,
+          leading: const Icon(Icons.account_tree),
+          title: titleRow,
+          subtitle: Text(
+            '$nameEn | Level: $level',
+          ),
+          children: children
+              .map(
+                (child) => _buildAccountTreeNode(
+                  context,
+                  child,
+                  allAccounts,
+                ),
+              )
+              .toList(),
+        ),
+      );
     }
 
-    await FirebaseFirestore.instance
-        .collection('chart_of_accounts')
-        .doc(documentId)
-        .delete();
-  }
-    await FirebaseFirestore.instance
-        .collection('chart_of_accounts')
-        .doc(documentId)
-        .delete();
+    return Padding(
+      padding: EdgeInsets.only(
+        right: (level - 1) * 20.0,
+      ),
+      child: ListTile(
+        leading: const Icon(Icons.subdirectory_arrow_left),
+        title: titleRow,
+        subtitle: Text(
+          '$nameEn | Level: $level',
+        ),
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('شجرة الحسابات'),
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => _addAccount(context),
-        child: const Icon(Icons.add),
-      ),
-      body: StreamBuilder<QuerySnapshot>(
-        stream: FirebaseFirestore.instance
-            .collection('chart_of_accounts')
-            .orderBy('code')
-            .snapshots(),
-        builder: (context, snapshot) {
-          if (snapshot.hasError) {
-            return const Center(
-              child: Text('حدث خطأ'),
-            );
-          }
-
-          if (!snapshot.hasData) {
-            return const Center(
-              child: CircularProgressIndicator(),
-            );
-          }
-
-          final docs = snapshot.data!.docs;
-
-          return ListView.builder(
-            itemCount: docs.length,
-            itemBuilder: (context, index) {
-              final data =
-                  docs[index].data() as Map<String, dynamic>;
-              final level = data['level'] ?? 1;
-              return Padding(
-                padding: EdgeInsets.only(
-                  right: (level - 1) * 30.0,
-                ),
-                child: ListTile(
-                leading: const Icon(Icons.account_tree),
-                title: Text(
-                  '${data['code']} - ${data['nameAr']}',
-                ),
-                subtitle: Text(
-                  '${data['nameEn']} | Level: ${data['level']}',
-                ),
-                trailing: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    IconButton(
-                      icon: const Icon(Icons.edit),
-                      onPressed: () {
-                        _editAccount(
-                          context,
-                          docs[index].id,
-                          data,
-                        );
-                      },
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.delete),
-                      onPressed: () {
-                        _deleteAccount(
-                          context,
-                          docs[index].id,
-                          data['code'],
-                        );
-                      },
-                    ),
-                  ],
-                ),
-               ),
+    return Directionality(
+      textDirection: TextDirection.rtl,
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text('شجرة الحسابات'),
+        ),
+        floatingActionButton: FloatingActionButton(
+          onPressed: () => _addAccount(context),
+          child: const Icon(Icons.add),
+        ),
+        body: StreamBuilder<QuerySnapshot>(
+          stream: FirebaseFirestore.instance
+              .collection('chart_of_accounts')
+              .orderBy('code')
+              .snapshots(),
+          builder: (context, snapshot) {
+            if (snapshot.hasError) {
+              return const Center(
+                child: Text('حدث خطأ'),
               );
-            },
-          );
-        },
+            }
+
+            if (!snapshot.hasData) {
+              return const Center(
+                child: CircularProgressIndicator(),
+              );
+            }
+
+            final docs = snapshot.data!.docs;
+
+            final accounts = docs.map((doc) {
+              final data = doc.data() as Map<String, dynamic>;
+
+              return {
+                'id': doc.id,
+                ...data,
+              };
+            }).toList();
+
+            accounts.sort(
+              (a, b) => a['code'].toString().compareTo(
+                    b['code'].toString(),
+                  ),
+            );
+
+            final allCodes = accounts
+                .map(
+                  (account) => account['code'].toString(),
+                )
+                .toSet();
+
+            final rootAccounts = accounts.where((account) {
+              final parentCode =
+                  (account['parentCode'] ?? '').toString().trim();
+
+              return parentCode.isEmpty ||
+                  parentCode == 'root' ||
+                  !allCodes.contains(parentCode);
+            }).toList();
+
+            return ListView(
+              children: rootAccounts
+                  .map(
+                    (account) => _buildAccountTreeNode(
+                      context,
+                      account,
+                      accounts,
+                    ),
+                  )
+                  .toList(),
+            );
+          },
+        ),
       ),
     );
   }
