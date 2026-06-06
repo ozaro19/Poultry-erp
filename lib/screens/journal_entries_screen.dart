@@ -885,8 +885,10 @@ class JournalEntriesScreen extends StatelessWidget {
     );
   }
 
-  @override
+   @override
   Widget build(BuildContext context) {
+    String searchQuery = '';
+
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(
@@ -897,105 +899,165 @@ class JournalEntriesScreen extends StatelessWidget {
           onPressed: () => _addJournalEntry(context),
           child: const Icon(Icons.add),
         ),
-        body: StreamBuilder<QuerySnapshot>(
-          stream: FirebaseFirestore.instance
-              .collection('journal_entries')
-              .orderBy('createdAt', descending: true)
-              .snapshots(),
-          builder: (context, snapshot) {
-            if (snapshot.hasError) {
-              return const Center(
-                child: Text('حدث خطأ'),
-              );
-            }
-
-            if (!snapshot.hasData) {
-              return const Center(
-                child: CircularProgressIndicator(),
-              );
-            }
-
-            final docs = snapshot.data!.docs;
-
-            if (docs.isEmpty) {
-              return const Center(
-                child: Text('لا توجد قيود يومية حتى الآن'),
-              );
-            }
-
-            return ListView.builder(
-              itemCount: docs.length,
-              itemBuilder: (context, index) {
-                final data = docs[index].data() as Map<String, dynamic>;
-                final documentId = docs[index].id;
-
-                final description = data['description'] ?? '';
-                final entryNo = data['entryNo'] ?? '';
-                final totalDebit = data['totalDebit'] ?? 0;
-                final totalCredit = data['totalCredit'] ?? 0;
-                final isBalanced = data['isBalanced'] == true;
-                final date = data['date'] as Timestamp?;
-                final lines = (data['lines'] as List?) ?? [];
-
-                return Card(
-                  margin: const EdgeInsets.all(8),
-                  child: ListTile(
-                    onTap: () => _showEntryDetails(context, data),
-                    leading: Icon(
-                      isBalanced ? Icons.check_circle : Icons.error,
-                      color: isBalanced ? Colors.green : Colors.red,
+        body: StatefulBuilder(
+          builder: (context, setSearchState) {
+            return Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: TextField(
+                    decoration: const InputDecoration(
+                      labelText: 'ابحث برقم القيد أو الوصف أو الحساب',
+                      prefixIcon: Icon(Icons.search),
+                      border: OutlineInputBorder(),
                     ),
-                    title: Text(
-                      entryNo.toString().isEmpty
-                          ? description
-                          : '$entryNo - $description',
-                    ),
-                    subtitle: Text(
-                      'التاريخ: ${_formatDate(date)}\n'
-                      'مدين: $totalDebit | دائن: $totalCredit\n'
-                      'عدد السطور: ${lines.length}',
-                    ),
-                    trailing: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          isBalanced ? 'متوازن' : 'غير متوازن',
-                          style: TextStyle(
-                            color: isBalanced ? Colors.green : Colors.red,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.edit),
-                          onPressed: () async {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('تم الضغط على زر التعديل'),
-                              ),
-                            );
-
-                            await _editJournalEntryFull(
-                              context,
-                              documentId,
-                              data,
-                            );
-                          },
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.delete),
-                          onPressed: () {
-                            _deleteJournalEntry(
-                              context,
-                              documentId,
-                              description.toString(),
-                            );
-                          },
-                        ),
-                      ],
-                    ),
+                    onChanged: (value) {
+                      setSearchState(() {
+                        searchQuery = value.trim().toLowerCase();
+                      });
+                    },
                   ),
-                );
-              },
+                ),
+                Expanded(
+                  child: StreamBuilder<QuerySnapshot>(
+                    stream: FirebaseFirestore.instance
+                        .collection('journal_entries')
+                        .orderBy('createdAt', descending: true)
+                        .snapshots(),
+                    builder: (context, snapshot) {
+                      if (snapshot.hasError) {
+                        return const Center(
+                          child: Text('حدث خطأ'),
+                        );
+                      }
+
+                      if (!snapshot.hasData) {
+                        return const Center(
+                          child: CircularProgressIndicator(),
+                        );
+                      }
+
+                      final docs = snapshot.data!.docs;
+
+                      if (docs.isEmpty) {
+                        return const Center(
+                          child: Text('لا توجد قيود يومية حتى الآن'),
+                        );
+                      }
+
+                      final filteredDocs = docs.where((doc) {
+                        final data = doc.data() as Map<String, dynamic>;
+
+                        final description =
+                            (data['description'] ?? '').toString().toLowerCase();
+                        final entryNo =
+                            (data['entryNo'] ?? '').toString().toLowerCase();
+
+                        final lines = (data['lines'] as List?) ?? [];
+
+                        final linesText = lines.map((line) {
+                          final item = line as Map<String, dynamic>;
+
+                          final accountCode =
+                              (item['accountCode'] ?? '').toString();
+                          final accountName =
+                              (item['accountName'] ?? '').toString();
+
+                          return '$accountCode $accountName';
+                        }).join(' ').toLowerCase();
+
+                        return entryNo.contains(searchQuery) ||
+                            description.contains(searchQuery) ||
+                            linesText.contains(searchQuery);
+                      }).toList();
+
+                      if (filteredDocs.isEmpty) {
+                        return const Center(
+                          child: Text('لا توجد نتائج مطابقة للبحث'),
+                        );
+                      }
+
+                      return ListView.builder(
+                        itemCount: filteredDocs.length,
+                        itemBuilder: (context, index) {
+                          final data =
+                              filteredDocs[index].data() as Map<String, dynamic>;
+                          final documentId = filteredDocs[index].id;
+
+                          final description = data['description'] ?? '';
+                          final entryNo = data['entryNo'] ?? '';
+                          final totalDebit = data['totalDebit'] ?? 0;
+                          final totalCredit = data['totalCredit'] ?? 0;
+                          final isBalanced = data['isBalanced'] == true;
+                          final date = data['date'] as Timestamp?;
+                          final lines = (data['lines'] as List?) ?? [];
+
+                          return Card(
+                            margin: const EdgeInsets.all(8),
+                            child: ListTile(
+                              onTap: () => _showEntryDetails(context, data),
+                              leading: Icon(
+                                isBalanced ? Icons.check_circle : Icons.error,
+                                color: isBalanced ? Colors.green : Colors.red,
+                              ),
+                              title: Text(
+                                entryNo.toString().isEmpty
+                                    ? description
+                                    : '$entryNo - $description',
+                              ),
+                              subtitle: Text(
+                                'التاريخ: ${_formatDate(date)}\n'
+                                'مدين: $totalDebit | دائن: $totalCredit\n'
+                                'عدد السطور: ${lines.length}',
+                              ),
+                              trailing: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(
+                                    isBalanced ? 'متوازن' : 'غير متوازن',
+                                    style: TextStyle(
+                                      color:
+                                          isBalanced ? Colors.green : Colors.red,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                  IconButton(
+                                    icon: const Icon(Icons.edit),
+                                    onPressed: () async {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        const SnackBar(
+                                          content:
+                                              Text('تم الضغط على زر التعديل'),
+                                        ),
+                                      );
+
+                                      await _editJournalEntryFull(
+                                        context,
+                                        documentId,
+                                        data,
+                                      );
+                                    },
+                                  ),
+                                  IconButton(
+                                    icon: const Icon(Icons.delete),
+                                    onPressed: () {
+                                      _deleteJournalEntry(
+                                        context,
+                                        documentId,
+                                        description.toString(),
+                                      );
+                                    },
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
+                        },
+                      );
+                    },
+                  ),
+                ),
+              ],
             );
           },
         ),
