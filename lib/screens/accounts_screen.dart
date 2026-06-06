@@ -140,6 +140,40 @@ class AccountsScreen extends StatelessWidget {
       },
     );
   }
+Future<void> _deleteAccount(
+  BuildContext context,
+  String documentId,
+  String accountName,
+) async {
+  final result = await showDialog<bool>(
+    context: context,
+    builder: (context) {
+      return AlertDialog(
+        title: const Text('تأكيد الحذف'),
+        content: Text(
+          'هل تريد حذف الحساب $accountName ؟',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('إلغاء'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('حذف'),
+          ),
+        ],
+      );
+    },
+  );
+
+  if (result == true) {
+    await FirebaseFirestore.instance
+        .collection('chart_of_accounts')
+        .doc(documentId)
+        .delete();
+  }
+}
 
   @override
   Widget build(BuildContext context) {
@@ -185,15 +219,30 @@ class AccountsScreen extends StatelessWidget {
                 subtitle: Text(
                   '${data['nameEn']} | Level: ${data['level']}',
                 ),
-                trailing: IconButton(
-                  icon: const Icon(Icons.edit),
-                  onPressed: () {
-                    _editAccount(
-                      context,
-                      docs[index].id,
-                      data,
-                    );
-                  },
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.edit),
+                      onPressed: () {
+                        _editAccount(
+                          context,
+                          docs[index].id,
+                          data,
+                        );
+                      },
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.delete),
+                      onPressed: () {
+                        _deleteAccount(
+                          context,
+                          docs[index].id,
+                          data['nameAr'],
+                        );
+                      },
+                    ),
+                  ],
                 ),
               );
             },
