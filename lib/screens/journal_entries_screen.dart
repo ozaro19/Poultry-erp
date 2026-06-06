@@ -301,11 +301,24 @@ class JournalEntriesScreen extends StatelessWidget {
                       );
                       return;
                     }
-                    final entriesSnapshot = await FirebaseFirestore.instance
-                        .collection('journal_entries')
-                        .get();
+                    final counterRef = FirebaseFirestore.instance
+                        .collection('counters')
+                        .doc('journal_entries');
 
-                    final nextNumber = entriesSnapshot.docs.length + 1;
+                    final counterSnapshot = await counterRef.get();
+
+                    int lastNumber = 0;
+
+                    if (counterSnapshot.exists) {
+                      final counterData = counterSnapshot.data();
+                      lastNumber = counterData?['lastNumber'] ?? 0;
+                    }
+
+                    final nextNumber = lastNumber + 1;
+
+                    await counterRef.set({
+                      'lastNumber': nextNumber,
+                    }, SetOptions(merge: true));
 
                     final entryNo = 'JE-${nextNumber.toString().padLeft(4, '0')}';
 
