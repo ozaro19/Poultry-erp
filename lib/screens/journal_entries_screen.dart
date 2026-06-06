@@ -421,6 +421,20 @@ class JournalEntriesScreen extends StatelessWidget {
     }
   }
 
+  void _showEditJournalEntryMessage(
+    BuildContext context,
+    String entryNo,
+    String description,
+  ) {
+    final title = entryNo.isEmpty ? description : entryNo;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('تعديل القيد $title'),
+      ),
+    );
+  }
+
   void _showEntryDetails(
     BuildContext context,
     Map<String, dynamic> data,
@@ -610,6 +624,16 @@ class JournalEntriesScreen extends StatelessWidget {
                             color: isBalanced ? Colors.green : Colors.red,
                             fontWeight: FontWeight.bold,
                           ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.edit),
+                          onPressed: () {
+                            _showEditJournalEntryMessage(
+                              context,
+                              entryNo.toString(),
+                              description.toString(),
+                            );
+                          },
                         ),
                         IconButton(
                           icon: const Icon(Icons.delete),
