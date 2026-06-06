@@ -83,6 +83,64 @@ class AccountsScreen extends StatelessWidget {
     );
   }
 
+  Future<void> _editAccount(
+    BuildContext context,
+    String documentId,
+    Map<String, dynamic> data,
+  ) async {
+    final nameArController =
+        TextEditingController(text: data['nameAr']);
+
+    final nameEnController =
+        TextEditingController(text: data['nameEn']);
+
+    await showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('تعديل الحساب'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: nameArController,
+                decoration: const InputDecoration(
+                  labelText: 'الاسم بالعربية',
+                ),
+              ),
+              TextField(
+                controller: nameEnController,
+                decoration: const InputDecoration(
+                  labelText: 'الاسم بالإنجليزية',
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('إلغاء'),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                await FirebaseFirestore.instance
+                    .collection('chart_of_accounts')
+                    .doc(documentId)
+                    .update({
+                  'nameAr': nameArController.text,
+                  'nameEn': nameEnController.text,
+                });
+
+                Navigator.pop(context);
+              },
+              child: const Text('حفظ'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -125,7 +183,17 @@ class AccountsScreen extends StatelessWidget {
                   '${data['code']} - ${data['nameAr']}',
                 ),
                 subtitle: Text(
-                  data['nameEn'],
+                  '${data['nameEn']} | Level: ${data['level']}',
+                ),
+                trailing: IconButton(
+                  icon: const Icon(Icons.edit),
+                  onPressed: () {
+                    _editAccount(
+                      context,
+                      docs[index].id,
+                      data,
+                    );
+                  },
                 ),
               );
             },
