@@ -392,51 +392,114 @@ class JournalEntriesScreen extends StatelessWidget {
   }
 
   void _showEntryDetails(
-    BuildContext context,
-    Map<String, dynamic> data,
-  ) {
-    final lines = (data['lines'] as List?) ?? [];
+  BuildContext context,
+  Map<String, dynamic> data,
+) {
+  final lines = (data['lines'] as List?) ?? [];
+  final entryNo = data['entryNo'] ?? '';
+  final description = data['description'] ?? 'تفاصيل القيد';
+  final totalDebit = data['totalDebit'] ?? 0;
+  final totalCredit = data['totalCredit'] ?? 0;
 
-    showDialog(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: Text(data['description'] ?? 'تفاصيل القيد'),
-          content: SizedBox(
-            width: 600,
-            child: SingleChildScrollView(
-              child: Column(
-                children: [
-                  if (lines.isEmpty)
-                    const Text('لا توجد تفاصيل لهذا القيد')
-                  else
-                    ...lines.map((line) {
+  showDialog(
+    context: context,
+    builder: (context) {
+      return AlertDialog(
+        title: Text(
+          entryNo.toString().isEmpty
+              ? description
+              : '$entryNo - $description',
+        ),
+        content: SizedBox(
+          width: 750,
+          child: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                if (lines.isEmpty)
+                  const Text('لا توجد تفاصيل لهذا القيد')
+                else
+                  DataTable(
+                    columns: const [
+                      DataColumn(
+                        label: Text('الحساب'),
+                      ),
+                      DataColumn(
+                        label: Text('مدين'),
+                        numeric: true,
+                      ),
+                      DataColumn(
+                        label: Text('دائن'),
+                        numeric: true,
+                      ),
+                    ],
+                    rows: lines.map((line) {
                       final item = line as Map<String, dynamic>;
 
-                      return ListTile(
-                        title: Text(
-                          '${item['accountCode']} - ${item['accountName']}',
-                        ),
-                        subtitle: Text(
-                          'مدين: ${item['debit']} | دائن: ${item['credit']}',
-                        ),
+                      return DataRow(
+                        cells: [
+                          DataCell(
+                            Text(
+                              '${item['accountCode']} - ${item['accountName']}',
+                            ),
+                          ),
+                          DataCell(
+                            Text(
+                              item['debit'].toString(),
+                            ),
+                          ),
+                          DataCell(
+                            Text(
+                              item['credit'].toString(),
+                            ),
+                          ),
+                        ],
                       );
-                    }),
-                ],
-              ),
+                    }).toList(),
+                  ),
+
+                const SizedBox(height: 16),
+
+                const Divider(),
+
+                Row(
+                  children: [
+                    const Text(
+                      'الإجمالي',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const Spacer(),
+                    Text(
+                      'مدين: $totalDebit',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(width: 20),
+                    Text(
+                      'دائن: $totalCredit',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
             ),
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('إغلاق'),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('إغلاق'),
+          ),
+        ],
+      );
+    },
+  );
+}
   @override
   Widget build(BuildContext context) {
     return Directionality(
