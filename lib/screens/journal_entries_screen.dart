@@ -4,16 +4,13 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 class JournalEntriesScreen extends StatelessWidget {
   const JournalEntriesScreen({super.key});
 
-  Future<void> _addJournalEntry(BuildContext context) async {
-    final descriptionController = TextEditingController();
-    DateTime selectedDate = DateTime.now();
-
+  Future<List<Map<String, dynamic>>> _loadAccounts() async {
     final accountsSnapshot = await FirebaseFirestore.instance
         .collection('chart_of_accounts')
         .orderBy('code')
         .get();
 
-    final accounts = accountsSnapshot.docs.map((doc) {
+    return accountsSnapshot.docs.map((doc) {
       final data = doc.data();
 
       return {
@@ -21,20 +18,50 @@ class JournalEntriesScreen extends StatelessWidget {
         ...data,
       };
     }).toList();
+  }
 
-    final lines = <Map<String, dynamic>>[];
+  Map<String, dynamic> _createEmptyLine() {
+    return {
+      'accountCode': '',
+      'accountName': '',
+      'debitController': TextEditingController(text: '0'),
+      'creditController': TextEditingController(text: '0'),
+    };
+  }
 
-    void addEmptyLine() {
-      lines.add({
-        'accountCode': '',
-        'accountName': '',
-        'debitController': TextEditingController(text: '0'),
-        'creditController': TextEditingController(text: '0'),
-      });
+  double _calculateTotalDebit(List<Map<String, dynamic>> lines) {
+    double total = 0;
+
+    for (final line in lines) {
+      final debitController = line['debitController'] as TextEditingController;
+      total += double.tryParse(debitController.text.trim()) ?? 0;
     }
 
-    addEmptyLine();
-    addEmptyLine();
+    return total;
+  }
+
+  double _calculateTotalCredit(List<Map<String, dynamic>> lines) {
+    double total = 0;
+
+    for (final line in lines) {
+      final creditController =
+          line['creditController'] as TextEditingController;
+      total += double.tryParse(creditController.text.trim()) ?? 0;
+    }
+
+    return total;
+  }
+
+  Future<void> _addJournalEntry(BuildContext context) async {
+    final descriptionController = TextEditingController();
+    DateTime selectedDate = DateTime.now();
+
+    final accounts = await _loadAccounts();
+
+    final lines = <Map<String, dynamic>>[
+      _createEmptyLine(),
+      _createEmptyLine(),
+    ];
 
     if (!context.mounted) return;
 
@@ -43,19 +70,8 @@ class JournalEntriesScreen extends StatelessWidget {
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setState) {
-            double totalDebit = 0;
-            double totalCredit = 0;
-
-            for (final line in lines) {
-              final debitController =
-                  line['debitController'] as TextEditingController;
-              final creditController =
-                  line['creditController'] as TextEditingController;
-
-              totalDebit += double.tryParse(debitController.text.trim()) ?? 0;
-              totalCredit += double.tryParse(creditController.text.trim()) ?? 0;
-            }
-
+            final totalDebit = _calculateTotalDebit(lines);
+            final totalCredit = _calculateTotalCredit(lines);
             final isBalanced = totalDebit == totalCredit;
 
             return AlertDialog(
@@ -210,7 +226,7 @@ class JournalEntriesScreen extends StatelessWidget {
                       ElevatedButton.icon(
                         onPressed: () {
                           setState(() {
-                            addEmptyLine();
+                            lines.add(_createEmptyLine());
                           });
                         },
                         icon: const Icon(Icons.add),
@@ -413,7 +429,7 @@ class JournalEntriesScreen extends StatelessWidget {
     }
   }
 
-  Future<void> _editJournalEntryBasic(
+  Future<void> _editJournalEntryFull(
     BuildContext context,
     String documentId,
     Map<String, dynamic> data,
@@ -430,11 +446,44 @@ class JournalEntriesScreen extends StatelessWidget {
       selectedDate = currentDate.toDate();
     }
 
+    final accounts = await _loadAccounts();
+
+    final oldLines = (data['lines'] as List?) ?? [];
+
+    final lines = <Map<String, dynamic>>[];
+
+    for (final oldLine in oldLines) {
+      final line = oldLine as Map<String, dynamic>;
+
+      lines.add({
+        'accountCode': line['accountCode']?.toString() ?? '',
+        'accountName': line['accountName']?.toString() ?? '',
+        'debitController': TextEditingController(
+          text: (line['debit'] ?? 0).toString(),
+        ),
+        'creditController': TextEditingController(
+          text: (line['credit'] ?? 0).toString(),
+        ),
+      });
+    }
+
+    if (lines.length < 2) {
+      while (lines.length < 2) {
+        lines.add(_createEmptyLine());
+      }
+    }
+
+    if (!context.mounted) return;
+
     await showDialog(
       context: context,
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setState) {
+            final totalDebit = _calculateTotalDebit(lines);
+            final totalCredit = _calculateTotalCredit(lines);
+            final isBalanced = totalDebit == totalCredit;
+
             return AlertDialog(
               title: Text(
                 data['entryNo'] == null || data['entryNo'].toString().isEmpty
@@ -442,47 +491,183 @@ class JournalEntriesScreen extends StatelessWidget {
                     : 'تعديل القيد ${data['entryNo']}',
               ),
               content: SizedBox(
-                width: 500,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            'تاريخ القيد: ${selectedDate.year}-${selectedDate.month}-${selectedDate.day}',
-                            style: const TextStyle(
-                              fontWeight: FontWeight.bold,
+                width: 700,
+                child: SingleChildScrollView(
+                  child: Column(
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              'تاريخ القيد: ${selectedDate.year}-${selectedDate.month}-${selectedDate.day}',
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
                           ),
-                        ),
-                        TextButton(
-                          onPressed: () async {
-                            final pickedDate = await showDatePicker(
-                              context: context,
-                              initialDate: selectedDate,
-                              firstDate: DateTime(2020),
-                              lastDate: DateTime(2100),
-                            );
+                          TextButton(
+                            onPressed: () async {
+                              final pickedDate = await showDatePicker(
+                                context: context,
+                                initialDate: selectedDate,
+                                firstDate: DateTime(2020),
+                                lastDate: DateTime(2100),
+                              );
 
-                            if (pickedDate != null) {
-                              setState(() {
-                                selectedDate = pickedDate;
-                              });
-                            }
-                          },
-                          child: const Text('اختيار التاريخ'),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: descriptionController,
-                      decoration: const InputDecoration(
-                        labelText: 'وصف القيد',
+                              if (pickedDate != null) {
+                                setState(() {
+                                  selectedDate = pickedDate;
+                                });
+                              }
+                            },
+                            child: const Text('اختيار التاريخ'),
+                          ),
+                        ],
                       ),
-                    ),
-                  ],
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: descriptionController,
+                        decoration: const InputDecoration(
+                          labelText: 'وصف القيد',
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      ...lines.asMap().entries.map((entry) {
+                        final index = entry.key;
+                        final line = entry.value;
+
+                        final debitController =
+                            line['debitController'] as TextEditingController;
+                        final creditController =
+                            line['creditController'] as TextEditingController;
+
+                        final selectedAccountCode =
+                            line['accountCode'].toString().isEmpty
+                                ? null
+                                : line['accountCode'].toString();
+
+                        return Card(
+                          margin: const EdgeInsets.symmetric(vertical: 8),
+                          child: Padding(
+                            padding: const EdgeInsets.all(8),
+                            child: Column(
+                              children: [
+                                Row(
+                                  children: [
+                                    Text(
+                                      'سطر ${index + 1}',
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                    const Spacer(),
+                                    IconButton(
+                                      icon: const Icon(Icons.delete),
+                                      onPressed: lines.length <= 2
+                                          ? null
+                                          : () {
+                                              setState(() {
+                                                lines.removeAt(index);
+                                              });
+                                            },
+                                    ),
+                                  ],
+                                ),
+                                DropdownButtonFormField<String>(
+                                  value: selectedAccountCode,
+                                  decoration: const InputDecoration(
+                                    labelText: 'الحساب',
+                                  ),
+                                  items: accounts.map((account) {
+                                    final code = account['code'].toString();
+                                    final nameAr = account['nameAr'].toString();
+
+                                    return DropdownMenuItem(
+                                      value: code,
+                                      child: Text('$code - $nameAr'),
+                                    );
+                                  }).toList(),
+                                  onChanged: (value) {
+                                    if (value == null) return;
+
+                                    final selectedAccount = accounts.firstWhere(
+                                      (account) =>
+                                          account['code'].toString() == value,
+                                    );
+
+                                    setState(() {
+                                      line['accountCode'] = value;
+                                      line['accountName'] =
+                                          selectedAccount['nameAr'].toString();
+                                    });
+                                  },
+                                ),
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: TextField(
+                                        controller: debitController,
+                                        decoration: const InputDecoration(
+                                          labelText: 'مدين',
+                                        ),
+                                        keyboardType: TextInputType.number,
+                                        onChanged: (_) {
+                                          setState(() {});
+                                        },
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: TextField(
+                                        controller: creditController,
+                                        decoration: const InputDecoration(
+                                          labelText: 'دائن',
+                                        ),
+                                        keyboardType: TextInputType.number,
+                                        onChanged: (_) {
+                                          setState(() {});
+                                        },
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      }),
+                      const SizedBox(height: 8),
+                      ElevatedButton.icon(
+                        onPressed: () {
+                          setState(() {
+                            lines.add(_createEmptyLine());
+                          });
+                        },
+                        icon: const Icon(Icons.add),
+                        label: const Text('إضافة سطر'),
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        'إجمالي المدين: $totalDebit',
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      Text(
+                        'إجمالي الدائن: $totalCredit',
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      Text(
+                        isBalanced ? 'القيد متوازن' : 'القيد غير متوازن',
+                        style: TextStyle(
+                          color: isBalanced ? Colors.green : Colors.red,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
               actions: [
@@ -492,13 +677,75 @@ class JournalEntriesScreen extends StatelessWidget {
                 ),
                 ElevatedButton(
                   onPressed: () async {
-                    final newDescription =
-                        descriptionController.text.trim();
+                    final description = descriptionController.text.trim();
 
-                    if (newDescription.isEmpty) {
+                    if (description.isEmpty) {
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(
                           content: Text('يجب إدخال وصف القيد'),
+                        ),
+                      );
+                      return;
+                    }
+
+                    final savedLines = <Map<String, dynamic>>[];
+
+                    double finalTotalDebit = 0;
+                    double finalTotalCredit = 0;
+
+                    for (final line in lines) {
+                      final accountCode =
+                          line['accountCode'].toString().trim();
+                      final accountName =
+                          line['accountName'].toString().trim();
+
+                      final debitController =
+                          line['debitController'] as TextEditingController;
+                      final creditController =
+                          line['creditController'] as TextEditingController;
+
+                      final debit =
+                          double.tryParse(debitController.text.trim()) ?? 0;
+                      final credit =
+                          double.tryParse(creditController.text.trim()) ?? 0;
+
+                      if (accountCode.isEmpty) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('يجب اختيار حساب لكل سطر'),
+                          ),
+                        );
+                        return;
+                      }
+
+                      if (debit == 0 && credit == 0) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text(
+                              'كل سطر يجب أن يحتوي على مدين أو دائن',
+                            ),
+                          ),
+                        );
+                        return;
+                      }
+
+                      savedLines.add({
+                        'accountCode': accountCode,
+                        'accountName': accountName,
+                        'debit': debit,
+                        'credit': credit,
+                      });
+
+                      finalTotalDebit += debit;
+                      finalTotalCredit += credit;
+                    }
+
+                    if (finalTotalDebit != finalTotalCredit) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text(
+                            'لا يمكن حفظ قيد غير متوازن',
+                          ),
                         ),
                       );
                       return;
@@ -508,8 +755,12 @@ class JournalEntriesScreen extends StatelessWidget {
                         .collection('journal_entries')
                         .doc(documentId)
                         .update({
-                      'description': newDescription,
                       'date': Timestamp.fromDate(selectedDate),
+                      'description': description,
+                      'lines': savedLines,
+                      'totalDebit': finalTotalDebit,
+                      'totalCredit': finalTotalCredit,
+                      'isBalanced': finalTotalDebit == finalTotalCredit,
                       'updatedAt': Timestamp.now(),
                     });
 
@@ -716,8 +967,14 @@ class JournalEntriesScreen extends StatelessWidget {
                         ),
                         IconButton(
                           icon: const Icon(Icons.edit),
-                          onPressed: () {
-                            _editJournalEntryBasic(
+                          onPressed: () async {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('تم الضغط على زر التعديل'),
+                              ),
+                            );
+
+                            await _editJournalEntryFull(
                               context,
                               documentId,
                               data,
