@@ -60,6 +60,26 @@ class AccountsScreen extends StatelessWidget {
             ),
             ElevatedButton(
               onPressed: () async {
+                final existingAccount =
+                    await FirebaseFirestore.instance
+                        .collection('chart_of_accounts')
+                        .where(
+                          'code',
+                          isEqualTo: codeController.text,
+                        )
+                        .get();
+
+                if (existingAccount.docs.isNotEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text(
+                        'كود الحساب موجود بالفعل',
+                      ),
+                    ),
+                  );
+                  return;
+                }
+
                 await FirebaseFirestore.instance
                     .collection('chart_of_accounts')
                     .add({
@@ -143,7 +163,7 @@ class AccountsScreen extends StatelessWidget {
 Future<void> _deleteAccount(
   BuildContext context,
   String documentId,
-  String accountName,
+  String accountCode,
 ) async {
   final result = await showDialog<bool>(
     context: context,
@@ -151,7 +171,7 @@ Future<void> _deleteAccount(
       return AlertDialog(
         title: const Text('تأكيد الحذف'),
         content: Text(
-          'هل تريد حذف الحساب $accountName ؟',
+          'هل تريد حذف الحساب $accountCode ؟',
         ),
         actions: [
           TextButton(
@@ -166,14 +186,39 @@ Future<void> _deleteAccount(
       );
     },
   );
-
   if (result == true) {
+    final children =
+      await FirebaseFirestore.instance
+          .collection('chart_of_accounts')
+          .where(
+            'parentCode',
+            isEqualTo: accountCode,
+          )
+          .get();
+
+    if (children.docs.isNotEmpty) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'لا يمكن حذف الحساب لأنه يحتوي على حسابات فرعية',
+            ),
+          ),
+        );
+      }
+      return;
+    }
+
     await FirebaseFirestore.instance
         .collection('chart_of_accounts')
         .doc(documentId)
         .delete();
   }
-}
+    await FirebaseFirestore.instance
+        .collection('chart_of_accounts')
+        .doc(documentId)
+        .delete();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -210,8 +255,12 @@ Future<void> _deleteAccount(
             itemBuilder: (context, index) {
               final data =
                   docs[index].data() as Map<String, dynamic>;
-
-              return ListTile(
+              final level = data['level'] ?? 1;
+              return Padding(
+                padding: EdgeInsets.only(
+                  right: (level - 1) * 30.0,
+                ),
+                child: ListTile(
                 leading: const Icon(Icons.account_tree),
                 title: Text(
                   '${data['code']} - ${data['nameAr']}',
@@ -238,12 +287,13 @@ Future<void> _deleteAccount(
                         _deleteAccount(
                           context,
                           docs[index].id,
-                          data['nameAr'],
+                          data['code'],
                         );
                       },
                     ),
                   ],
                 ),
+               ),
               );
             },
           );
