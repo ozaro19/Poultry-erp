@@ -291,6 +291,16 @@ class JournalEntriesScreen extends StatelessWidget {
                       finalTotalDebit += debit;
                       finalTotalCredit += credit;
                     }
+                    if (finalTotalDebit != finalTotalCredit) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text(
+                            'لا يمكن حفظ قيد غير متوازن',
+                          ),
+                        ),
+                      );
+                      return;
+                    }
 
                     await FirebaseFirestore.instance
                         .collection('journal_entries')
