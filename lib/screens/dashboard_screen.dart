@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'accounts_screen.dart';
+import 'journal_entries_screen.dart';
 
 class DashboardScreen extends StatelessWidget {
   const DashboardScreen({super.key});
@@ -25,6 +26,18 @@ class DashboardScreen extends StatelessWidget {
         context,
         MaterialPageRoute(
           builder: (_) => const AccountsScreen(),
+        ),
+      );
+    },
+  ),
+  _MenuCard(
+    'القيود اليومية',
+    Icons.receipt_long,
+    () {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => const JournalEntriesScreen(),
         ),
       );
     },
