@@ -301,18 +301,26 @@ class JournalEntriesScreen extends StatelessWidget {
                       );
                       return;
                     }
-
-                    await FirebaseFirestore.instance
+                    final entriesSnapshot = await FirebaseFirestore.instance
                         .collection('journal_entries')
-                        .add({
-                      'date': Timestamp.now(),
-                      'description': description,
-                      'lines': savedLines,
-                      'totalDebit': finalTotalDebit,
-                      'totalCredit': finalTotalCredit,
-                      'isBalanced': finalTotalDebit == finalTotalCredit,
-                      'createdAt': Timestamp.now(),
-                    });
+                        .get();
+
+                    final nextNumber = entriesSnapshot.docs.length + 1;
+
+                    final entryNo = 'JE-${nextNumber.toString().padLeft(4, '0')}';
+
+                      await FirebaseFirestore.instance
+                          .collection('journal_entries')
+                          .add({
+                        'entryNo': entryNo,
+                        'date': Timestamp.now(),
+                        'description': description,
+                        'lines': savedLines,
+                        'totalDebit': finalTotalDebit,
+                        'totalCredit': finalTotalCredit,
+                        'isBalanced': finalTotalDebit == finalTotalCredit,
+                        'createdAt': Timestamp.now(),
+                      });
 
                     if (context.mounted) {
                       Navigator.pop(context);
@@ -334,6 +342,40 @@ class JournalEntriesScreen extends StatelessWidget {
     final date = timestamp.toDate();
 
     return '${date.year}-${date.month}-${date.day}';
+  }
+  Future<void> _deleteJournalEntry(
+    BuildContext context,
+    String documentId,
+    String description,
+  ) async {
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('تأكيد الحذف'),
+          content: Text(
+            'هل تريد حذف القيد: $description ؟',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('إلغاء'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('حذف'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (result == true) {
+      await FirebaseFirestore.instance
+          .collection('journal_entries')
+          .doc(documentId)
+          .delete();
+    }
   }
 
   void _showEntryDetails(
@@ -424,8 +466,10 @@ class JournalEntriesScreen extends StatelessWidget {
               itemCount: docs.length,
               itemBuilder: (context, index) {
                 final data = docs[index].data() as Map<String, dynamic>;
-
+                final documentId = docs[index].id;
+                
                 final description = data['description'] ?? '';
+                final entryNo = data['entryNo'] ?? '';
                 final totalDebit = data['totalDebit'] ?? 0;
                 final totalCredit = data['totalCredit'] ?? 0;
                 final isBalanced = data['isBalanced'] == true;
@@ -440,18 +484,37 @@ class JournalEntriesScreen extends StatelessWidget {
                       isBalanced ? Icons.check_circle : Icons.error,
                       color: isBalanced ? Colors.green : Colors.red,
                     ),
-                    title: Text(description),
+                    title: Text(
+                      entryNo.toString().isEmpty
+                          ? description
+                          : '$entryNo - $description',
+                    ),
                     subtitle: Text(
                       'التاريخ: ${_formatDate(date)}\n'
                       'مدين: $totalDebit | دائن: $totalCredit\n'
                       'عدد السطور: ${lines.length}',
                     ),
-                    trailing: Text(
-                      isBalanced ? 'متوازن' : 'غير متوازن',
-                      style: TextStyle(
-                        color: isBalanced ? Colors.green : Colors.red,
-                        fontWeight: FontWeight.bold,
-                      ),
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          isBalanced ? 'متوازن' : 'غير متوازن',
+                          style: TextStyle(
+                            color: isBalanced ? Colors.green : Colors.red,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.delete),
+                          onPressed: () {
+                            _deleteJournalEntry(
+                              context,
+                              documentId,
+                              description.toString(),
+                            );
+                          },
+                        ),
+                      ],
                     ),
                   ),
                 );
