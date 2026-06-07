@@ -397,8 +397,8 @@ if (currentDate is Timestamp) {
   selectedDate = currentDate.toDate();
 }
 
-  final transactionType =
-      oldDescription.startsWith('صرف خزينة') ? 'صرف' : 'قبض';
+  String transactionType =
+    oldDescription.startsWith('صرف خزينة') ? 'صرف' : 'قبض';
 
   final descriptionController = TextEditingController(
     text: oldDescription
@@ -450,11 +450,29 @@ if (currentDate is Timestamp) {
           child: SingleChildScrollView(
             child: Column(
               children: [
-                Text(
-                  'نوع الحركة: $transactionType',
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
+                DropdownButtonFormField<String>(
+                  initialValue: transactionType,
+                  decoration: const InputDecoration(
+                    labelText: 'نوع الحركة',
+                    border: OutlineInputBorder(),
                   ),
+                  items: const [
+                    DropdownMenuItem(
+                      value: 'قبض',
+                      child: Text('قبض'),
+                    ),
+                    DropdownMenuItem(
+                      value: 'صرف',
+                      child: Text('صرف'),
+                    ),
+                  ],
+                  onChanged: (value) {
+                    if (value == null) return;
+
+                    setState(() {
+                      transactionType = value;
+                    });
+                  },
                 ),
                 const SizedBox(height: 8),
                 Row(
