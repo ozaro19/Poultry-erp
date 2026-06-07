@@ -3,6 +3,7 @@ import 'accounts_screen.dart';
 import 'journal_entries_screen.dart';
 import 'account_ledger_screen.dart';
 import 'trial_balance_screen.dart';
+import 'cash_screen.dart';
 
 class DashboardScreen extends StatelessWidget {
   const DashboardScreen({super.key});
@@ -28,6 +29,18 @@ class DashboardScreen extends StatelessWidget {
                   context,
                   MaterialPageRoute(
                     builder: (_) => const AccountsScreen(),
+                  ),
+                );
+              },
+            ),
+            _MenuCard(
+              'الخزينة',
+              Icons.account_balance_wallet,
+              () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const CashScreen(),
                   ),
                 );
               },
