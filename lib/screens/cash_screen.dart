@@ -345,6 +345,247 @@ class _CashScreenState extends State<CashScreen> {
       },
     );
   }
+Future<void> _editCashTransaction(
+  BuildContext context,
+  String documentId,
+) async {
+  if (selectedCashAccountCode == null) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('يجب اختيار حساب الخزينة أولًا'),
+      ),
+    );
+    return;
+  }
+
+  final entrySnapshot = await FirebaseFirestore.instance
+      .collection('journal_entries')
+      .doc(documentId)
+      .get();
+
+  if (!entrySnapshot.exists) {
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('لم يتم العثور على حركة الخزينة'),
+        ),
+      );
+    }
+    return;
+  }
+
+  final data = entrySnapshot.data() ?? {};
+
+  if ((data['source'] ?? '').toString() != 'cash') {
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('لا يمكن تعديل هذا القيد من شاشة الخزينة'),
+        ),
+      );
+    }
+    return;
+  }
+
+  final entryNo = data['entryNo'] ?? '';
+  final oldDescription = (data['description'] ?? '').toString();
+  final date = data['date'] as Timestamp?;
+
+  final transactionType =
+      oldDescription.startsWith('صرف خزينة') ? 'صرف' : 'قبض';
+
+  final descriptionController = TextEditingController(
+    text: oldDescription
+        .replaceFirst('قبض خزينة - ', '')
+        .replaceFirst('صرف خزينة - ', ''),
+  );
+
+  String cashAccountCode = selectedCashAccountCode!;
+  String cashAccountName = selectedCashAccountName;
+
+  String? otherAccountCode;
+  String otherAccountName = '';
+
+  double amount = 0;
+
+  final lines = (data['lines'] as List?) ?? [];
+
+  for (final line in lines) {
+    final item = line as Map<String, dynamic>;
+
+    final accountCode = item['accountCode'].toString();
+    final accountName = (item['accountName'] ?? '').toString();
+
+    final debit = double.tryParse(item['debit'].toString()) ?? 0;
+    final credit = double.tryParse(item['credit'].toString()) ?? 0;
+
+    if (accountCode == cashAccountCode) {
+      cashAccountName = accountName;
+      amount = debit > 0 ? debit : credit;
+    } else {
+      otherAccountCode = accountCode;
+      otherAccountName = accountName;
+    }
+  }
+
+  final amountController = TextEditingController(
+    text: amount.toString(),
+  );
+
+  if (!context.mounted) return;
+
+  showDialog(
+    context: context,
+    builder: (context) {
+      return AlertDialog(
+        title: Text('تعديل حركة خزينة $entryNo'),
+        content: SizedBox(
+          width: 500,
+          child: SingleChildScrollView(
+            child: Column(
+              children: [
+                Text(
+                  'نوع الحركة: $transactionType',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'التاريخ: ${_formatDate(date)}',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'حساب الخزينة: $cashAccountCode - $cashAccountName',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'الحساب المقابل: $otherAccountCode - $otherAccountName',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: amountController,
+                  decoration: const InputDecoration(
+                    labelText: 'المبلغ',
+                    border: OutlineInputBorder(),
+                  ),
+                  keyboardType: TextInputType.number,
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: descriptionController,
+                  decoration: const InputDecoration(
+                    labelText: 'البيان',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('إلغاء'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              final newAmount =
+                  double.tryParse(amountController.text.trim()) ?? 0;
+
+              final newDescription =
+                  descriptionController.text.trim();
+
+              if (otherAccountCode == null || otherAccountCode.isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('الحساب المقابل غير موجود'),
+                  ),
+                );
+                return;
+              }
+
+              if (newAmount <= 0) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('يجب إدخال مبلغ صحيح'),
+                  ),
+                );
+                return;
+              }
+
+              if (newDescription.isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('يجب إدخال البيان'),
+                  ),
+                );
+                return;
+              }
+
+              final newLines = transactionType == 'قبض'
+                  ? [
+                      {
+                        'accountCode': cashAccountCode,
+                        'accountName': cashAccountName,
+                        'debit': newAmount,
+                        'credit': 0,
+                      },
+                      {
+                        'accountCode': otherAccountCode,
+                        'accountName': otherAccountName,
+                        'debit': 0,
+                        'credit': newAmount,
+                      },
+                    ]
+                  : [
+                      {
+                        'accountCode': otherAccountCode,
+                        'accountName': otherAccountName,
+                        'debit': newAmount,
+                        'credit': 0,
+                      },
+                      {
+                        'accountCode': cashAccountCode,
+                        'accountName': cashAccountName,
+                        'debit': 0,
+                        'credit': newAmount,
+                      },
+                    ];
+
+              await FirebaseFirestore.instance
+                  .collection('journal_entries')
+                  .doc(documentId)
+                  .update({
+                'description': '$transactionType خزينة - $newDescription',
+                'lines': newLines,
+                'totalDebit': newAmount,
+                'totalCredit': newAmount,
+                'isBalanced': true,
+                'source': 'cash',
+                'updatedAt': Timestamp.now(),
+              });
+
+              if (context.mounted) {
+                Navigator.pop(context);
+              }
+            },
+            child: const Text('حفظ التعديل'),
+          ),
+        ],
+      );
+    },
+  );
+}
 
   Future<void> _deleteCashTransaction(
     BuildContext context,
@@ -601,6 +842,9 @@ class _CashScreenState extends State<CashScreen> {
                                             numeric: true,
                                           ),
                                           DataColumn(
+                                            label: Text('تعديل'),
+                                          ),
+                                          DataColumn(
                                             label: Text('حذف'),
                                           ),
                                         ],
@@ -638,6 +882,21 @@ class _CashScreenState extends State<CashScreen> {
                                                 Text(
                                                   row['credit'].toString(),
                                                 ),
+                                              ),
+                                             DataCell(
+                                                isCashSource
+                                                    ? IconButton(
+                                                        icon: const Icon(
+                                                          Icons.edit,
+                                                        ),
+                                                        onPressed: () {
+                                                          _editCashTransaction(
+                                                            context,
+                                                            row['documentId'].toString(),
+                                                          );
+                                                        },
+                                                      )
+                                                    : const Text('-'),
                                               ),
                                               DataCell(
                                                 isCashSource
