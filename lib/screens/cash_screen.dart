@@ -11,6 +11,10 @@ class CashScreen extends StatefulWidget {
 class _CashScreenState extends State<CashScreen> {
   String? selectedCashAccountCode;
   String selectedCashAccountName = '';
+  String cashSearchQuery = '';
+
+  DateTime? fromDate;
+  DateTime? toDate;
 
   String _formatDate(Timestamp? timestamp) {
     if (timestamp == null) return '';
@@ -831,12 +835,59 @@ if (currentDate is Timestamp) {
                             docs,
                             selectedCashAccountCode!,
                           );
+                          final filteredRows = rows.where((row) {
+                            final entryNo = row['entryNo'].toString().toLowerCase();
+                            final description = row['description'].toString().toLowerCase();
+
+                            final matchesSearch = entryNo.contains(cashSearchQuery) ||
+                                description.contains(cashSearchQuery);
+
+                            final rowDateValue = row['date'];
+
+                            bool matchesDate = true;
+
+                            if (rowDateValue is Timestamp) {
+                              final rowDate = rowDateValue.toDate();
+
+                              final rowDateOnly = DateTime(
+                                rowDate.year,
+                                rowDate.month,
+                                rowDate.day,
+                              );
+
+                              if (fromDate != null) {
+                                final fromDateOnly = DateTime(
+                                  fromDate!.year,
+                                  fromDate!.month,
+                                  fromDate!.day,
+                                );
+
+                                if (rowDateOnly.isBefore(fromDateOnly)) {
+                                  matchesDate = false;
+                                }
+                              }
+
+                              if (toDate != null) {
+                                final toDateOnly = DateTime(
+                                  toDate!.year,
+                                  toDate!.month,
+                                  toDate!.day,
+                                );
+
+                                if (rowDateOnly.isAfter(toDateOnly)) {
+                                  matchesDate = false;
+                                }
+                              }
+                            }
+
+                            return matchesSearch && matchesDate;
+                          }).toList();
 
                           double totalDebit = 0;
                           double totalCredit = 0;
                           double balance = 0;
 
-                          for (final row in rows) {
+                          for (final row in filteredRows) {
                             final debit = double.tryParse(
                                   row['debit'].toString(),
                                 ) ??
@@ -881,7 +932,85 @@ if (currentDate is Timestamp) {
                                 ),
                               ),
                               const SizedBox(height: 12),
-                              if (rows.isEmpty)
+
+                              TextField(
+                                decoration: const InputDecoration(
+                                  labelText: 'بحث برقم القيد أو البيان',
+                                  prefixIcon: Icon(Icons.search),
+                                  border: OutlineInputBorder(),
+                                ),
+                                onChanged: (value) {
+                                  setState(() {
+                                    cashSearchQuery = value.trim().toLowerCase();
+                                  });
+                                },
+                              ),
+
+                              const SizedBox(height: 12),
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: OutlinedButton(
+                                      onPressed: () async {
+                                        final pickedDate = await showDatePicker(
+                                          context: context,
+                                          initialDate: fromDate ?? DateTime.now(),
+                                          firstDate: DateTime(2020),
+                                          lastDate: DateTime(2100),
+                                        );
+
+                                        if (pickedDate != null) {
+                                          setState(() {
+                                            fromDate = pickedDate;
+                                          });
+                                        }
+                                      },
+                                      child: Text(
+                                        fromDate == null
+                                            ? 'من تاريخ'
+                                            : 'من: ${fromDate!.year}-${fromDate!.month}-${fromDate!.day}',
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: OutlinedButton(
+                                      onPressed: () async {
+                                        final pickedDate = await showDatePicker(
+                                          context: context,
+                                          initialDate: toDate ?? DateTime.now(),
+                                          firstDate: DateTime(2020),
+                                          lastDate: DateTime(2100),
+                                        );
+
+                                        if (pickedDate != null) {
+                                          setState(() {
+                                            toDate = pickedDate;
+                                          });
+                                        }
+                                      },
+                                      child: Text(
+                                        toDate == null
+                                            ? 'إلى تاريخ'
+                                            : 'إلى: ${toDate!.year}-${toDate!.month}-${toDate!.day}',
+                                      ),
+                                    ),
+                                  ),
+                                  IconButton(
+                                    icon: const Icon(Icons.clear),
+                                    onPressed: () {
+                                      setState(() {
+                                        fromDate = null;
+                                        toDate = null;
+                                      });
+                                    },
+                                  ),
+                                ],
+                              ),
+
+                              const SizedBox(height: 12),
+
+                              if (filteredRows.isEmpty)
                                 const Expanded(
                                   child: Center(
                                     child: Text(
@@ -920,7 +1049,7 @@ if (currentDate is Timestamp) {
                                             label: Text('حذف'),
                                           ),
                                         ],
-                                        rows: rows.map((row) {
+                                        rows: filteredRows.map((row) {
                                           final isCashSource =
                                               row['source'].toString() ==
                                                   'cash';
