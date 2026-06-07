@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'accounts_screen.dart';
 import 'journal_entries_screen.dart';
 import 'account_ledger_screen.dart';
+import 'trial_balance_screen.dart';
 
 class DashboardScreen extends StatelessWidget {
   const DashboardScreen({super.key});
@@ -56,6 +57,18 @@ class DashboardScreen extends StatelessWidget {
               },
             ),
             _MenuCard(
+              'ميزان المراجعة',
+              Icons.balance,
+              () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const TrialBalanceScreen(),
+                  ),
+                );
+              },
+            ),
+            _MenuCard(
               'رأس المال',
               Icons.savings,
               () {},
@@ -95,9 +108,8 @@ class _MenuCard extends StatelessWidget {
   const _MenuCard(
     this.title,
     this.icon,
-    this.onTap, {
-    super.key,
-  });
+    this.onTap,
+  );
 
   @override
   Widget build(BuildContext context) {
