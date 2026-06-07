@@ -117,9 +117,7 @@ class _CashScreenState extends State<CashScreen> {
                           ),
                         ],
                       ),
-
                       const SizedBox(height: 12),
-
                       DropdownButtonFormField<String>(
                         initialValue: transactionType,
                         decoration: const InputDecoration(
@@ -144,9 +142,7 @@ class _CashScreenState extends State<CashScreen> {
                           });
                         },
                       ),
-
                       const SizedBox(height: 12),
-
                       DropdownButtonFormField<String>(
                         initialValue: cashAccountCode,
                         decoration: const InputDecoration(
@@ -177,9 +173,7 @@ class _CashScreenState extends State<CashScreen> {
                           });
                         },
                       ),
-
                       const SizedBox(height: 12),
-
                       DropdownButtonFormField<String>(
                         initialValue: otherAccountCode,
                         decoration: const InputDecoration(
@@ -210,9 +204,7 @@ class _CashScreenState extends State<CashScreen> {
                           });
                         },
                       ),
-
                       const SizedBox(height: 12),
-
                       TextField(
                         controller: amountController,
                         decoration: const InputDecoration(
@@ -221,9 +213,7 @@ class _CashScreenState extends State<CashScreen> {
                         ),
                         keyboardType: TextInputType.number,
                       ),
-
                       const SizedBox(height: 12),
-
                       TextField(
                         controller: descriptionController,
                         decoration: const InputDecoration(
@@ -356,6 +346,41 @@ class _CashScreenState extends State<CashScreen> {
     );
   }
 
+  Future<void> _deleteCashTransaction(
+    BuildContext context,
+    String documentId,
+    String description,
+  ) async {
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('تأكيد الحذف'),
+          content: Text(
+            'هل تريد حذف حركة الخزينة: $description ؟',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('إلغاء'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('حذف'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (result == true) {
+      await FirebaseFirestore.instance
+          .collection('journal_entries')
+          .doc(documentId)
+          .delete();
+    }
+  }
+
   List<Map<String, dynamic>> _extractCashRows(
     List<QueryDocumentSnapshot> docs,
     String accountCode,
@@ -366,17 +391,20 @@ class _CashScreenState extends State<CashScreen> {
       final data = doc.data() as Map<String, dynamic>;
 
       final lines = (data['lines'] as List?) ?? [];
+      final source = (data['source'] ?? '').toString();
 
       for (final line in lines) {
         final item = line as Map<String, dynamic>;
 
         if (item['accountCode'].toString() == accountCode) {
           rows.add({
+            'documentId': doc.id,
             'entryNo': data['entryNo'] ?? '',
             'date': data['date'],
             'description': data['description'] ?? '',
             'debit': item['debit'] ?? 0,
             'credit': item['credit'] ?? 0,
+            'source': source,
           });
         }
       }
@@ -458,9 +486,7 @@ class _CashScreenState extends State<CashScreen> {
                       });
                     },
                   ),
-
                   const SizedBox(height: 16),
-
                   if (selectedCashAccountCode == null)
                     const Expanded(
                       child: Center(
@@ -541,9 +567,7 @@ class _CashScreenState extends State<CashScreen> {
                                   ),
                                 ),
                               ),
-
                               const SizedBox(height: 12),
-
                               if (rows.isEmpty)
                                 const Expanded(
                                   child: Center(
@@ -576,8 +600,15 @@ class _CashScreenState extends State<CashScreen> {
                                             label: Text('صرف'),
                                             numeric: true,
                                           ),
+                                          DataColumn(
+                                            label: Text('حذف'),
+                                          ),
                                         ],
                                         rows: rows.map((row) {
+                                          final isCashSource =
+                                              row['source'].toString() ==
+                                                  'cash';
+
                                           return DataRow(
                                             cells: [
                                               DataCell(
@@ -607,6 +638,24 @@ class _CashScreenState extends State<CashScreen> {
                                                 Text(
                                                   row['credit'].toString(),
                                                 ),
+                                              ),
+                                              DataCell(
+                                                isCashSource
+                                                    ? IconButton(
+                                                        icon: const Icon(
+                                                          Icons.delete,
+                                                        ),
+                                                        onPressed: () {
+                                                          _deleteCashTransaction(
+                                                            context,
+                                                            row['documentId']
+                                                                .toString(),
+                                                            row['description']
+                                                                .toString(),
+                                                          );
+                                                        },
+                                                      )
+                                                    : const Text('-'),
                                               ),
                                             ],
                                           );
