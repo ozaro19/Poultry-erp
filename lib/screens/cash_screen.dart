@@ -36,6 +36,326 @@ class _CashScreenState extends State<CashScreen> {
     }).toList();
   }
 
+  Future<String> _generateEntryNo() async {
+    final counterRef = FirebaseFirestore.instance
+        .collection('counters')
+        .doc('journal_entries');
+
+    final counterSnapshot = await counterRef.get();
+
+    int lastNumber = 0;
+
+    if (counterSnapshot.exists) {
+      final counterData = counterSnapshot.data();
+      lastNumber = counterData?['lastNumber'] ?? 0;
+    }
+
+    final nextNumber = lastNumber + 1;
+
+    await counterRef.set({
+      'lastNumber': nextNumber,
+    }, SetOptions(merge: true));
+
+    return 'JE-${nextNumber.toString().padLeft(4, '0')}';
+  }
+
+  Future<void> _addCashTransaction(BuildContext context) async {
+    final amountController = TextEditingController();
+    final descriptionController = TextEditingController();
+
+    DateTime selectedDate = DateTime.now();
+    String transactionType = 'قبض';
+
+    String? cashAccountCode = selectedCashAccountCode;
+    String cashAccountName = selectedCashAccountName;
+
+    String? otherAccountCode;
+    String otherAccountName = '';
+
+    final accounts = await _loadAccounts();
+
+    if (!context.mounted) return;
+
+    await showDialog(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return AlertDialog(
+              title: const Text('إضافة حركة خزينة'),
+              content: SizedBox(
+                width: 650,
+                child: SingleChildScrollView(
+                  child: Column(
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              'التاريخ: ${selectedDate.year}-${selectedDate.month}-${selectedDate.day}',
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                          TextButton(
+                            onPressed: () async {
+                              final pickedDate = await showDatePicker(
+                                context: context,
+                                initialDate: selectedDate,
+                                firstDate: DateTime(2020),
+                                lastDate: DateTime(2100),
+                              );
+
+                              if (pickedDate != null) {
+                                setState(() {
+                                  selectedDate = pickedDate;
+                                });
+                              }
+                            },
+                            child: const Text('اختيار التاريخ'),
+                          ),
+                        ],
+                      ),
+
+                      const SizedBox(height: 12),
+
+                      DropdownButtonFormField<String>(
+                        initialValue: transactionType,
+                        decoration: const InputDecoration(
+                          labelText: 'نوع الحركة',
+                          border: OutlineInputBorder(),
+                        ),
+                        items: const [
+                          DropdownMenuItem(
+                            value: 'قبض',
+                            child: Text('قبض'),
+                          ),
+                          DropdownMenuItem(
+                            value: 'صرف',
+                            child: Text('صرف'),
+                          ),
+                        ],
+                        onChanged: (value) {
+                          if (value == null) return;
+
+                          setState(() {
+                            transactionType = value;
+                          });
+                        },
+                      ),
+
+                      const SizedBox(height: 12),
+
+                      DropdownButtonFormField<String>(
+                        initialValue: cashAccountCode,
+                        decoration: const InputDecoration(
+                          labelText: 'حساب الخزينة',
+                          border: OutlineInputBorder(),
+                        ),
+                        items: accounts.map((account) {
+                          final code = account['code'].toString();
+                          final nameAr = account['nameAr'].toString();
+
+                          return DropdownMenuItem(
+                            value: code,
+                            child: Text('$code - $nameAr'),
+                          );
+                        }).toList(),
+                        onChanged: (value) {
+                          if (value == null) return;
+
+                          final selectedAccount = accounts.firstWhere(
+                            (account) =>
+                                account['code'].toString() == value,
+                          );
+
+                          setState(() {
+                            cashAccountCode = value;
+                            cashAccountName =
+                                selectedAccount['nameAr'].toString();
+                          });
+                        },
+                      ),
+
+                      const SizedBox(height: 12),
+
+                      DropdownButtonFormField<String>(
+                        initialValue: otherAccountCode,
+                        decoration: const InputDecoration(
+                          labelText: 'الحساب المقابل',
+                          border: OutlineInputBorder(),
+                        ),
+                        items: accounts.map((account) {
+                          final code = account['code'].toString();
+                          final nameAr = account['nameAr'].toString();
+
+                          return DropdownMenuItem(
+                            value: code,
+                            child: Text('$code - $nameAr'),
+                          );
+                        }).toList(),
+                        onChanged: (value) {
+                          if (value == null) return;
+
+                          final selectedAccount = accounts.firstWhere(
+                            (account) =>
+                                account['code'].toString() == value,
+                          );
+
+                          setState(() {
+                            otherAccountCode = value;
+                            otherAccountName =
+                                selectedAccount['nameAr'].toString();
+                          });
+                        },
+                      ),
+
+                      const SizedBox(height: 12),
+
+                      TextField(
+                        controller: amountController,
+                        decoration: const InputDecoration(
+                          labelText: 'المبلغ',
+                          border: OutlineInputBorder(),
+                        ),
+                        keyboardType: TextInputType.number,
+                      ),
+
+                      const SizedBox(height: 12),
+
+                      TextField(
+                        controller: descriptionController,
+                        decoration: const InputDecoration(
+                          labelText: 'البيان',
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('إلغاء'),
+                ),
+                ElevatedButton(
+                  onPressed: () async {
+                    final amount =
+                        double.tryParse(amountController.text.trim()) ?? 0;
+
+                    final description = descriptionController.text.trim();
+
+                    if (cashAccountCode == null ||
+                        cashAccountCode!.isEmpty) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('يجب اختيار حساب الخزينة'),
+                        ),
+                      );
+                      return;
+                    }
+
+                    if (otherAccountCode == null ||
+                        otherAccountCode!.isEmpty) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('يجب اختيار الحساب المقابل'),
+                        ),
+                      );
+                      return;
+                    }
+
+                    if (cashAccountCode == otherAccountCode) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text(
+                            'لا يمكن أن يكون حساب الخزينة هو نفس الحساب المقابل',
+                          ),
+                        ),
+                      );
+                      return;
+                    }
+
+                    if (amount <= 0) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('يجب إدخال مبلغ صحيح'),
+                        ),
+                      );
+                      return;
+                    }
+
+                    if (description.isEmpty) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('يجب إدخال البيان'),
+                        ),
+                      );
+                      return;
+                    }
+
+                    final entryNo = await _generateEntryNo();
+
+                    final lines = transactionType == 'قبض'
+                        ? [
+                            {
+                              'accountCode': cashAccountCode,
+                              'accountName': cashAccountName,
+                              'debit': amount,
+                              'credit': 0,
+                            },
+                            {
+                              'accountCode': otherAccountCode,
+                              'accountName': otherAccountName,
+                              'debit': 0,
+                              'credit': amount,
+                            },
+                          ]
+                        : [
+                            {
+                              'accountCode': otherAccountCode,
+                              'accountName': otherAccountName,
+                              'debit': amount,
+                              'credit': 0,
+                            },
+                            {
+                              'accountCode': cashAccountCode,
+                              'accountName': cashAccountName,
+                              'debit': 0,
+                              'credit': amount,
+                            },
+                          ];
+
+                    await FirebaseFirestore.instance
+                        .collection('journal_entries')
+                        .add({
+                      'entryNo': entryNo,
+                      'date': Timestamp.fromDate(selectedDate),
+                      'description': '$transactionType خزينة - $description',
+                      'lines': lines,
+                      'totalDebit': amount,
+                      'totalCredit': amount,
+                      'isBalanced': true,
+                      'source': 'cash',
+                      'createdAt': Timestamp.now(),
+                    });
+
+                    if (context.mounted) {
+                      Navigator.pop(context);
+                    }
+                  },
+                  child: const Text('حفظ'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
   List<Map<String, dynamic>> _extractCashRows(
     List<QueryDocumentSnapshot> docs,
     String accountCode,
@@ -62,6 +382,17 @@ class _CashScreenState extends State<CashScreen> {
       }
     }
 
+    rows.sort((a, b) {
+      final dateA = a['date'];
+      final dateB = b['date'];
+
+      if (dateA is Timestamp && dateB is Timestamp) {
+        return dateA.toDate().compareTo(dateB.toDate());
+      }
+
+      return 0;
+    });
+
     return rows;
   }
 
@@ -72,6 +403,10 @@ class _CashScreenState extends State<CashScreen> {
       child: Scaffold(
         appBar: AppBar(
           title: const Text('الخزينة'),
+        ),
+        floatingActionButton: FloatingActionButton(
+          onPressed: () => _addCashTransaction(context),
+          child: const Icon(Icons.add),
         ),
         body: Padding(
           padding: const EdgeInsets.all(16),
@@ -259,7 +594,8 @@ class _CashScreenState extends State<CashScreen> {
                                               ),
                                               DataCell(
                                                 Text(
-                                                  row['description'].toString(),
+                                                  row['description']
+                                                      .toString(),
                                                 ),
                                               ),
                                               DataCell(
