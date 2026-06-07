@@ -389,7 +389,13 @@ Future<void> _editCashTransaction(
 
   final entryNo = data['entryNo'] ?? '';
   final oldDescription = (data['description'] ?? '').toString();
-  final date = data['date'] as Timestamp?;
+  DateTime selectedDate = DateTime.now();
+
+final currentDate = data['date'];
+
+if (currentDate is Timestamp) {
+  selectedDate = currentDate.toDate();
+}
 
   final transactionType =
       oldDescription.startsWith('صرف خزينة') ? 'صرف' : 'قبض';
@@ -451,11 +457,34 @@ Future<void> _editCashTransaction(
                   ),
                 ),
                 const SizedBox(height: 8),
-                Text(
-                  'التاريخ: ${_formatDate(date)}',
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                  ),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        'التاريخ: ${selectedDate.year}-${selectedDate.month}-${selectedDate.day}',
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                    TextButton(
+                      onPressed: () async {
+                        final pickedDate = await showDatePicker(
+                          context: context,
+                          initialDate: selectedDate,
+                          firstDate: DateTime(2020),
+                          lastDate: DateTime(2100),
+                        );
+
+                        if (pickedDate != null) {
+                          setState(() {
+                            selectedDate = pickedDate;
+                          });
+                        }
+                      },
+                      child: const Text('تعديل التاريخ'),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 8),
                 Text(
@@ -566,6 +595,7 @@ Future<void> _editCashTransaction(
                   .collection('journal_entries')
                   .doc(documentId)
                   .update({
+                'date': Timestamp.fromDate(selectedDate),
                 'description': '$transactionType خزينة - $newDescription',
                 'lines': newLines,
                 'totalDebit': newAmount,
