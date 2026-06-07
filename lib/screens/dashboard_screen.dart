@@ -21,8 +21,8 @@ class DashboardScreen extends StatelessWidget {
           mainAxisSpacing: 12,
           children: [
             _MenuCard(
-              'الخزينة',
-              Icons.account_balance_wallet,
+              'شجرة الحسابات',
+              Icons.account_tree,
               () {
                 Navigator.push(
                   context,
