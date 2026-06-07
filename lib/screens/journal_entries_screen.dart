@@ -160,7 +160,7 @@ class JournalEntriesScreen extends StatelessWidget {
                                   ],
                                 ),
                                 DropdownButtonFormField<String>(
-                                  value: selectedAccountCode,
+                                  initialValue: selectedAccountCode,
                                   decoration: const InputDecoration(
                                     labelText: 'الحساب',
                                   ),
@@ -574,7 +574,7 @@ class JournalEntriesScreen extends StatelessWidget {
                                   ],
                                 ),
                                 DropdownButtonFormField<String>(
-                                  value: selectedAccountCode,
+                                  initialValue: selectedAccountCode,
                                   decoration: const InputDecoration(
                                     labelText: 'الحساب',
                                   ),
@@ -591,14 +591,12 @@ class JournalEntriesScreen extends StatelessWidget {
                                     if (value == null) return;
 
                                     final selectedAccount = accounts.firstWhere(
-                                      (account) =>
-                                          account['code'].toString() == value,
+                                      (account) => account['code'].toString() == value,
                                     );
 
                                     setState(() {
                                       line['accountCode'] = value;
-                                      line['accountName'] =
-                                          selectedAccount['nameAr'].toString();
+                                      line['accountName'] = selectedAccount['nameAr'].toString();
                                     });
                                   },
                                 ),

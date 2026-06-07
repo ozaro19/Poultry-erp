@@ -65,7 +65,7 @@ class _AccountsScreenState extends State<AccountsScreen> {
                   ),
 
                   DropdownButtonFormField<String>(
-                    value: selectedParentCode,
+                    initialValue: selectedParentCode,
                     decoration: const InputDecoration(
                       labelText: 'الحساب الأب',
                     ),

@@ -112,7 +112,7 @@ class _AccountLedgerScreenState extends State<AccountLedgerScreen> {
               return Column(
                 children: [
                   DropdownButtonFormField<String>(
-                    value: selectedAccountCode,
+                    initialValue: selectedAccountCode,
                     decoration: const InputDecoration(
                       labelText: 'اختر الحساب',
                       border: OutlineInputBorder(),
@@ -146,7 +146,7 @@ class _AccountLedgerScreenState extends State<AccountLedgerScreen> {
                   if (selectedAccountCode == null)
                     const Expanded(
                       child: Center(
-                        child: Text('اختاري حسابًا لعرض كشف الحساب'),
+                        child: Text('اختار حسابًا لعرض كشف الحساب'),
                       ),
                     )
                   else
