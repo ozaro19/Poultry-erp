@@ -438,6 +438,8 @@ if (currentDate is Timestamp) {
     text: amount.toString(),
   );
 
+  final accounts = await _loadAccounts();
+
   if (!context.mounted) return;
 
   showDialog(
@@ -512,11 +514,33 @@ if (currentDate is Timestamp) {
                   ),
                 ),
                 const SizedBox(height: 8),
-                Text(
-                  'الحساب المقابل: $otherAccountCode - $otherAccountName',
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
+                DropdownButtonFormField<String>(
+                  initialValue: otherAccountCode,
+                  decoration: const InputDecoration(
+                    labelText: 'الحساب المقابل',
+                    border: OutlineInputBorder(),
                   ),
+                  items: accounts.map((account) {
+                    final code = account['code'].toString();
+                    final nameAr = account['nameAr'].toString();
+
+                    return DropdownMenuItem(
+                      value: code,
+                      child: Text('$code - $nameAr'),
+                    );
+                  }).toList(),
+                  onChanged: (value) {
+                    if (value == null) return;
+
+                    final selectedAccount = accounts.firstWhere(
+                      (account) => account['code'].toString() == value,
+                    );
+
+                    setState(() {
+                      otherAccountCode = value;
+                      otherAccountName = selectedAccount['nameAr'].toString();
+                    });
+                  },
                 ),
                 const SizedBox(height: 12),
                 TextField(
@@ -552,7 +576,7 @@ if (currentDate is Timestamp) {
               final newDescription =
                   descriptionController.text.trim();
 
-              if (otherAccountCode == null || otherAccountCode.isEmpty) {
+              if ((otherAccountCode ?? '').isEmpty) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
                     content: Text('الحساب المقابل غير موجود'),
