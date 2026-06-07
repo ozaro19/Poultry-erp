@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'accounts_screen.dart';
 import 'journal_entries_screen.dart';
+import 'account_ledger_screen.dart';
 
 class DashboardScreen extends StatelessWidget {
   const DashboardScreen({super.key});
@@ -18,56 +19,68 @@ class DashboardScreen extends StatelessWidget {
           crossAxisSpacing: 12,
           mainAxisSpacing: 12,
           children: [
-  _MenuCard(
-    'الخزينة',
-    Icons.account_balance_wallet,
-    () {
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => const AccountsScreen(),
-        ),
-      );
-    },
-  ),
-  _MenuCard(
-    'القيود اليومية',
-    Icons.receipt_long,
-    () {
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => const JournalEntriesScreen(),
-        ),
-      );
-    },
-  ),
-  _MenuCard(
-    'رأس المال',
-    Icons.savings,
-    () {},
-  ),
-  _MenuCard(
-    'المخازن',
-    Icons.inventory,
-    () {},
-  ),
-  _MenuCard(
-    'دورات التسمين',
-    Icons.agriculture,
-    () {},
-  ),
-  _MenuCard(
-    'الأصول',
-    Icons.business,
-    () {},
-  ),
-  _MenuCard(
-    'التقارير',
-    Icons.bar_chart,
-    () {},
-  ),
-],
+            _MenuCard(
+              'الخزينة',
+              Icons.account_balance_wallet,
+              () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const AccountsScreen(),
+                  ),
+                );
+              },
+            ),
+            _MenuCard(
+              'القيود اليومية',
+              Icons.receipt_long,
+              () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const JournalEntriesScreen(),
+                  ),
+                );
+              },
+            ),
+            _MenuCard(
+              'كشف حساب',
+              Icons.list_alt,
+              () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const AccountLedgerScreen(),
+                  ),
+                );
+              },
+            ),
+            _MenuCard(
+              'رأس المال',
+              Icons.savings,
+              () {},
+            ),
+            _MenuCard(
+              'المخازن',
+              Icons.inventory,
+              () {},
+            ),
+            _MenuCard(
+              'دورات التسمين',
+              Icons.agriculture,
+              () {},
+            ),
+            _MenuCard(
+              'الأصول',
+              Icons.business,
+              () {},
+            ),
+            _MenuCard(
+              'التقارير',
+              Icons.bar_chart,
+              () {},
+            ),
+          ],
         ),
       ),
     );
