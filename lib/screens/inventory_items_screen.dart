@@ -324,6 +324,47 @@ class InventoryItemsScreen extends StatelessWidget {
           .delete();
     }
   }
+  Future<Map<String, double>> _calculateItemBalance(
+    String itemCode,
+    double openingQty,
+  ) async {
+    final transactionsSnapshot = await FirebaseFirestore.instance
+        .collection('inventory_transactions')
+        .where(
+          'itemCode',
+          isEqualTo: itemCode,
+        )
+        .get();
+
+    double totalAdd = 0;
+    double totalIssue = 0;
+
+    for (final doc in transactionsSnapshot.docs) {
+      final data = doc.data();
+
+      final type = (data['type'] ?? '').toString();
+
+      final quantity = double.tryParse(
+            (data['quantity'] ?? 0).toString(),
+          ) ??
+          0;
+
+      if (type == 'add') {
+        totalAdd += quantity;
+      } else if (type == 'issue') {
+        totalIssue += quantity;
+      }
+    }
+
+    final currentBalance = openingQty + totalAdd - totalIssue;
+
+    return {
+      'openingQty': openingQty,
+      'totalAdd': totalAdd,
+      'totalIssue': totalIssue,
+      'currentBalance': currentBalance,
+    };
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -372,18 +413,36 @@ class InventoryItemsScreen extends StatelessWidget {
                 final code = data['code'] ?? '';
                 final name = data['name'] ?? '';
                 final unit = data['unit'] ?? '';
-                final openingQty = data['openingQty'] ?? 0;
+                final openingQty = double.tryParse(
+                      (data['openingQty'] ?? 0).toString(),
+                    ) ??
+                    0;
 
-                return Card(
-                  margin: const EdgeInsets.all(8),
-                  child: ListTile(
-                    leading: const Icon(Icons.inventory),
-                    title: Text('$code - $name'),
-                    subtitle: Text(
-                      'الوحدة: $unit\n'
-                      'الرصيد الافتتاحي: $openingQty',
-                    ),
-                    trailing: Row(
+                return FutureBuilder<Map<String, double>>(
+                  future: _calculateItemBalance(
+                    code.toString(),
+                    openingQty,
+                  ),
+                  builder: (context, balanceSnapshot) {
+                    final balanceData = balanceSnapshot.data;
+
+                    final totalAdd = balanceData?['totalAdd'] ?? 0;
+                    final totalIssue = balanceData?['totalIssue'] ?? 0;
+                    final currentBalance = balanceData?['currentBalance'] ?? openingQty;
+
+                    return Card(
+                      margin: const EdgeInsets.all(8),
+                      child: ListTile(
+                        leading: const Icon(Icons.inventory),
+                        title: Text('$code - $name'),
+                        subtitle: Text(
+                          'الوحدة: $unit\n'
+                          'الرصيد الافتتاحي: $openingQty\n'
+                          'إجمالي الإضافة: $totalAdd\n'
+                          'إجمالي الصرف: $totalIssue\n'
+                          'الرصيد الحالي: $currentBalance',
+                        ),
+                        trailing: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         IconButton(
@@ -403,12 +462,14 @@ class InventoryItemsScreen extends StatelessWidget {
                               context,
                               documentId,
                               name.toString(),
-                            );
-                          },
+                                );
+                              },
+                            ),
+                          ],
                         ),
-                      ],
-                    ),
-                  ),
+                      ),
+                    );
+                  },
                 );
               },
             );
