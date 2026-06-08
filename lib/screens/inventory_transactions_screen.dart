@@ -314,9 +314,9 @@ class InventoryTransactionsScreen extends StatelessWidget {
     final type = (data['type'] ?? '').toString();
 
     String transactionType = type == 'issue' ? 'صرف' : 'إضافة';
-    final itemCode = (data['itemCode'] ?? '').toString();
-    final itemName = (data['itemName'] ?? '').toString();
-    final unit = (data['unit'] ?? '').toString();
+    String? selectedItemCode = (data['itemCode'] ?? '').toString();
+    String selectedItemName = (data['itemName'] ?? '').toString();
+    String selectedItemUnit = (data['unit'] ?? '').toString();
     DateTime selectedDate = DateTime.now();
 
     final currentDate = data['date'];
@@ -330,7 +330,7 @@ class InventoryTransactionsScreen extends StatelessWidget {
     final items = await _loadItems();
 
     final matchingItems = items.where(
-      (item) => item['code'].toString() == itemCode,
+      (item) => item['code'].toString() == selectedItemCode,
     );
 
     if (matchingItems.isNotEmpty) {
@@ -377,11 +377,38 @@ class InventoryTransactionsScreen extends StatelessWidget {
                     },
                   ),
                   const SizedBox(height: 8),
-                  Text(
-                    'الصنف: $itemCode - $itemName',
-                    style: const TextStyle(
-                      fontWeight: FontWeight.bold,
+                 DropdownButtonFormField<String>(
+                    initialValue: selectedItemCode,
+                    decoration: const InputDecoration(
+                      labelText: 'الصنف',
+                      border: OutlineInputBorder(),
                     ),
+                    items: items.map((item) {
+                      final code = item['code'].toString();
+                      final name = item['name'].toString();
+                      final unit = item['unit'].toString();
+
+                      return DropdownMenuItem(
+                        value: code,
+                        child: Text('$code - $name - $unit'),
+                      );
+                    }).toList(),
+                    onChanged: (value) {
+                      if (value == null) return;
+
+                      final selectedItem = items.firstWhere(
+                        (item) => item['code'].toString() == value,
+                      );
+
+                      selectedItemCode = value;
+                      selectedItemName = selectedItem['name'].toString();
+                      selectedItemUnit = selectedItem['unit'].toString();
+
+                      openingQty = double.tryParse(
+                            (selectedItem['openingQty'] ?? 0).toString(),
+                          ) ??
+                          0;
+                    },
                   ),
                   const SizedBox(height: 8),
                   Row(
@@ -415,7 +442,7 @@ class InventoryTransactionsScreen extends StatelessWidget {
                   TextField(
                     controller: quantityController,
                     decoration: InputDecoration(
-                      labelText: 'الكمية ($unit)',
+                      labelText: 'الكمية ($selectedItemUnit)',
                       border: const OutlineInputBorder(),
                     ),
                     keyboardType: TextInputType.number,
@@ -457,7 +484,7 @@ class InventoryTransactionsScreen extends StatelessWidget {
                 if (transactionType == 'صرف') {
                   final currentBalance =
                       await _calculateCurrentItemBalance(
-                    itemCode,
+                    selectedItemCode!,
                     openingQty,
                     excludeDocumentId: documentId,
                   );
@@ -489,6 +516,9 @@ class InventoryTransactionsScreen extends StatelessWidget {
                     .update({
                   'type': transactionType == 'إضافة' ? 'add' : 'issue',
                   'typeName': transactionType,
+                  'itemCode': selectedItemCode,
+                  'itemName': selectedItemName,
+                  'unit': selectedItemUnit,
                   'quantity': newQuantity,
                   'description': newDescription,
                   'date': Timestamp.fromDate(selectedDate),
