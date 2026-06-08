@@ -4,6 +4,7 @@ import 'journal_entries_screen.dart';
 import 'account_ledger_screen.dart';
 import 'trial_balance_screen.dart';
 import 'cash_screen.dart';
+import 'inventory_items_screen.dart';
 
 class DashboardScreen extends StatelessWidget {
   const DashboardScreen({super.key});
@@ -89,7 +90,14 @@ class DashboardScreen extends StatelessWidget {
             _MenuCard(
               'المخازن',
               Icons.inventory,
-              () {},
+              () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const InventoryItemsScreen(),
+                  ),
+                );
+              },
             ),
             _MenuCard(
               'دورات التسمين',
