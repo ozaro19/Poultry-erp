@@ -312,7 +312,8 @@ class InventoryTransactionsScreen extends StatelessWidget {
     );
 
     final type = (data['type'] ?? '').toString();
-    final typeName = (data['typeName'] ?? '').toString();
+
+    String transactionType = type == 'issue' ? 'صرف' : 'إضافة';
     final itemCode = (data['itemCode'] ?? '').toString();
     final itemName = (data['itemName'] ?? '').toString();
     final unit = (data['unit'] ?? '').toString();
@@ -353,11 +354,27 @@ class InventoryTransactionsScreen extends StatelessWidget {
             child: SingleChildScrollView(
               child: Column(
                 children: [
-                  Text(
-                    'نوع الحركة: $typeName',
-                    style: const TextStyle(
-                      fontWeight: FontWeight.bold,
+                  DropdownButtonFormField<String>(
+                    initialValue: transactionType,
+                    decoration: const InputDecoration(
+                      labelText: 'نوع الحركة',
+                      border: OutlineInputBorder(),
                     ),
+                    items: const [
+                      DropdownMenuItem(
+                        value: 'إضافة',
+                        child: Text('إذن إضافة مخزون'),
+                      ),
+                      DropdownMenuItem(
+                        value: 'صرف',
+                        child: Text('إذن صرف مخزون'),
+                      ),
+                    ],
+                    onChanged: (value) {
+                      if (value == null) return;
+
+                      transactionType = value;
+                    },
                   ),
                   const SizedBox(height: 8),
                   Text(
@@ -437,7 +454,7 @@ class InventoryTransactionsScreen extends StatelessWidget {
                   return;
                 }
 
-                if (type == 'issue') {
+                if (transactionType == 'صرف') {
                   final currentBalance =
                       await _calculateCurrentItemBalance(
                     itemCode,
@@ -470,6 +487,8 @@ class InventoryTransactionsScreen extends StatelessWidget {
                     .collection('inventory_transactions')
                     .doc(documentId)
                     .update({
+                  'type': transactionType == 'إضافة' ? 'add' : 'issue',
+                  'typeName': transactionType,
                   'quantity': newQuantity,
                   'description': newDescription,
                   'date': Timestamp.fromDate(selectedDate),
