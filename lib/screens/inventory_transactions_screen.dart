@@ -27,6 +27,40 @@ class InventoryTransactionsScreen extends StatelessWidget {
       };
     }).toList();
   }
+  Future<double> _calculateCurrentItemBalance(
+    String itemCode,
+    double openingQty,
+  ) async {
+    final transactionsSnapshot = await FirebaseFirestore.instance
+        .collection('inventory_transactions')
+        .where(
+          'itemCode',
+          isEqualTo: itemCode,
+        )
+        .get();
+
+    double totalAdd = 0;
+    double totalIssue = 0;
+
+    for (final doc in transactionsSnapshot.docs) {
+      final data = doc.data();
+
+      final type = (data['type'] ?? '').toString();
+
+      final quantity = double.tryParse(
+            (data['quantity'] ?? 0).toString(),
+          ) ??
+          0;
+
+      if (type == 'add') {
+        totalAdd += quantity;
+      } else if (type == 'issue') {
+        totalIssue += quantity;
+      }
+    }
+
+    return openingQty + totalAdd - totalIssue;
+  }
 
   Future<void> _addInventoryTransaction(BuildContext context) async {
     final quantityController = TextEditingController();
@@ -38,6 +72,7 @@ class InventoryTransactionsScreen extends StatelessWidget {
     String? selectedItemCode;
     String selectedItemName = '';
     String selectedItemUnit = '';
+    double selectedItemOpeningQty = 0;
 
     final items = await _loadItems();
 
@@ -144,10 +179,12 @@ class InventoryTransactionsScreen extends StatelessWidget {
 
                           setState(() {
                             selectedItemCode = value;
-                            selectedItemName =
-                                selectedItem['name'].toString();
-                            selectedItemUnit =
-                                selectedItem['unit'].toString();
+                            selectedItemName = selectedItem['name'].toString();
+                            selectedItemUnit = selectedItem['unit'].toString();
+                            selectedItemOpeningQty = double.tryParse(
+                                  (selectedItem['openingQty'] ?? 0).toString(),
+                                ) ??
+                                0;
                           });
                         },
                       ),
@@ -201,6 +238,23 @@ class InventoryTransactionsScreen extends StatelessWidget {
                         ),
                       );
                       return;
+                    }
+                    if (transactionType == 'صرف') {
+                      final currentBalance = await _calculateCurrentItemBalance(
+                        selectedItemCode!,
+                        selectedItemOpeningQty,
+                      );
+
+                      if (quantity > currentBalance) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(
+                              'لا يمكن صرف كمية أكبر من الرصيد المتاح. الرصيد الحالي: $currentBalance',
+                            ),
+                          ),
+                        );
+                        return;
+                      }
                     }
 
                     if (description.isEmpty) {
