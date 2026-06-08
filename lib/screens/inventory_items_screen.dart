@@ -138,6 +138,160 @@ class InventoryItemsScreen extends StatelessWidget {
     );
   }
 
+  Future<void> _editItem(
+    BuildContext context,
+    String documentId,
+    Map<String, dynamic> data,
+  ) async {
+    final codeController = TextEditingController(
+      text: (data['code'] ?? '').toString(),
+    );
+
+    final nameController = TextEditingController(
+      text: (data['name'] ?? '').toString(),
+    );
+
+    final unitController = TextEditingController(
+      text: (data['unit'] ?? '').toString(),
+    );
+
+    final openingQtyController = TextEditingController(
+      text: (data['openingQty'] ?? 0).toString(),
+    );
+
+    final oldCode = (data['code'] ?? '').toString();
+
+    await showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('تعديل الصنف'),
+          content: SizedBox(
+            width: 500,
+            child: SingleChildScrollView(
+              child: Column(
+                children: [
+                  TextField(
+                    controller: codeController,
+                    decoration: const InputDecoration(
+                      labelText: 'كود الصنف',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: nameController,
+                    decoration: const InputDecoration(
+                      labelText: 'اسم الصنف',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: unitController,
+                    decoration: const InputDecoration(
+                      labelText: 'وحدة القياس',
+                      hintText: 'مثال: كجم / طن / كرتونة / شيكارة',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: openingQtyController,
+                    decoration: const InputDecoration(
+                      labelText: 'الرصيد الافتتاحي',
+                      border: OutlineInputBorder(),
+                    ),
+                    keyboardType: TextInputType.number,
+                  ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('إلغاء'),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                final newCode = codeController.text.trim();
+                final newName = nameController.text.trim();
+                final newUnit = unitController.text.trim();
+                final newOpeningQty =
+                    double.tryParse(openingQtyController.text.trim()) ?? 0;
+
+                if (newCode.isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('يجب إدخال كود الصنف'),
+                    ),
+                  );
+                  return;
+                }
+
+                if (newName.isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('يجب إدخال اسم الصنف'),
+                    ),
+                  );
+                  return;
+                }
+
+                if (newUnit.isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('يجب إدخال وحدة القياس'),
+                    ),
+                  );
+                  return;
+                }
+
+                if (newCode != oldCode) {
+                  final existingItem = await FirebaseFirestore.instance
+                      .collection('inventory_items')
+                      .where(
+                        'code',
+                        isEqualTo: newCode,
+                      )
+                      .get();
+
+                  if (existingItem.docs.isNotEmpty) {
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('كود الصنف موجود بالفعل'),
+                        ),
+                      );
+                    }
+                    return;
+                  }
+                }
+
+                await FirebaseFirestore.instance
+                    .collection('inventory_items')
+                    .doc(documentId)
+                    .update({
+                  'code': newCode,
+                  'name': newName,
+                  'unit': newUnit,
+                  'openingQty': newOpeningQty,
+                  'updatedAt': Timestamp.now(),
+                });
+
+                if (context.mounted) {
+                  Navigator.pop(context);
+                }
+              },
+              child: const Text('حفظ التعديل'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   Future<void> _deleteItem(
     BuildContext context,
     String documentId,
@@ -229,15 +383,30 @@ class InventoryItemsScreen extends StatelessWidget {
                       'الوحدة: $unit\n'
                       'الرصيد الافتتاحي: $openingQty',
                     ),
-                    trailing: IconButton(
-                      icon: const Icon(Icons.delete),
-                      onPressed: () {
-                        _deleteItem(
-                          context,
-                          documentId,
-                          name.toString(),
-                        );
-                      },
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(
+                          icon: const Icon(Icons.edit),
+                          onPressed: () {
+                            _editItem(
+                              context,
+                              documentId,
+                              data,
+                            );
+                          },
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.delete),
+                          onPressed: () {
+                            _deleteItem(
+                              context,
+                              documentId,
+                              name.toString(),
+                            );
+                          },
+                        ),
+                      ],
                     ),
                   ),
                 );
