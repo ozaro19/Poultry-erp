@@ -29,8 +29,9 @@ class InventoryTransactionsScreen extends StatelessWidget {
   }
   Future<double> _calculateCurrentItemBalance(
     String itemCode,
-    double openingQty,
-  ) async {
+    double openingQty, {
+    String? excludeDocumentId,
+  }) async {
     final transactionsSnapshot = await FirebaseFirestore.instance
         .collection('inventory_transactions')
         .where(
@@ -43,6 +44,10 @@ class InventoryTransactionsScreen extends StatelessWidget {
     double totalIssue = 0;
 
     for (final doc in transactionsSnapshot.docs) {
+      if (excludeDocumentId != null && doc.id == excludeDocumentId) {
+        continue;
+      }
+
       final data = doc.data();
 
       final type = (data['type'] ?? '').toString();
@@ -293,6 +298,167 @@ class InventoryTransactionsScreen extends StatelessWidget {
       },
     );
   }
+  Future<void> _editInventoryTransaction(
+    BuildContext context,
+    String documentId,
+    Map<String, dynamic> data,
+  ) async {
+    final quantityController = TextEditingController(
+      text: (data['quantity'] ?? 0).toString(),
+    );
+
+    final descriptionController = TextEditingController(
+      text: (data['description'] ?? '').toString(),
+    );
+
+    final type = (data['type'] ?? '').toString();
+    final typeName = (data['typeName'] ?? '').toString();
+    final itemCode = (data['itemCode'] ?? '').toString();
+    final itemName = (data['itemName'] ?? '').toString();
+    final unit = (data['unit'] ?? '').toString();
+    final date = data['date'] as Timestamp?;
+
+    double openingQty = 0;
+
+    final items = await _loadItems();
+
+    final matchingItems = items.where(
+      (item) => item['code'].toString() == itemCode,
+    );
+
+    if (matchingItems.isNotEmpty) {
+      final selectedItem = matchingItems.first;
+
+      openingQty = double.tryParse(
+            (selectedItem['openingQty'] ?? 0).toString(),
+          ) ??
+          0;
+    }
+
+    if (!context.mounted) return;
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('تعديل حركة مخزون'),
+          content: SizedBox(
+            width: 500,
+            child: SingleChildScrollView(
+              child: Column(
+                children: [
+                  Text(
+                    'نوع الحركة: $typeName',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'الصنف: $itemCode - $itemName',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'التاريخ: ${_formatDate(date)}',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: quantityController,
+                    decoration: InputDecoration(
+                      labelText: 'الكمية ($unit)',
+                      border: const OutlineInputBorder(),
+                    ),
+                    keyboardType: TextInputType.number,
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: descriptionController,
+                    decoration: const InputDecoration(
+                      labelText: 'البيان',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('إلغاء'),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                final newQuantity =
+                    double.tryParse(quantityController.text.trim()) ?? 0;
+
+                final newDescription =
+                    descriptionController.text.trim();
+
+                if (newQuantity <= 0) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('يجب إدخال كمية صحيحة'),
+                    ),
+                  );
+                  return;
+                }
+
+                if (type == 'issue') {
+                  final currentBalance =
+                      await _calculateCurrentItemBalance(
+                    itemCode,
+                    openingQty,
+                    excludeDocumentId: documentId,
+                  );
+
+                  if (newQuantity > currentBalance) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          'لا يمكن صرف كمية أكبر من الرصيد المتاح. الرصيد الحالي: $currentBalance',
+                        ),
+                      ),
+                    );
+                    return;
+                  }
+                }
+
+                if (newDescription.isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('يجب إدخال البيان'),
+                    ),
+                  );
+                  return;
+                }
+
+                await FirebaseFirestore.instance
+                    .collection('inventory_transactions')
+                    .doc(documentId)
+                    .update({
+                  'quantity': newQuantity,
+                  'description': newDescription,
+                  'updatedAt': Timestamp.now(),
+                });
+
+                if (context.mounted) {
+                  Navigator.pop(context);
+                }
+              },
+              child: const Text('حفظ التعديل'),
+            ),
+          ],
+        );
+      },
+    );
+  }
 
   Future<void> _deleteInventoryTransaction(
     BuildContext context,
@@ -409,15 +575,30 @@ class InventoryTransactionsScreen extends StatelessWidget {
                       'الكمية: $quantity $unit\n'
                       'البيان: $description',
                     ),
-                    trailing: IconButton(
-                      icon: const Icon(Icons.delete),
-                      onPressed: () {
-                        _deleteInventoryTransaction(
-                          context,
-                          documentId,
-                          description.toString(),
-                        );
-                      },
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(
+                          icon: const Icon(Icons.edit),
+                          onPressed: () {
+                            _editInventoryTransaction(
+                              context,
+                              documentId,
+                              data,
+                            );
+                          },
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.delete),
+                          onPressed: () {
+                            _deleteInventoryTransaction(
+                              context,
+                              documentId,
+                              description.toString(),
+                            );
+                          },
+                        ),
+                      ],
                     ),
                   ),
                 );
