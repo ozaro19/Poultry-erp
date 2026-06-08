@@ -316,7 +316,13 @@ class InventoryTransactionsScreen extends StatelessWidget {
     final itemCode = (data['itemCode'] ?? '').toString();
     final itemName = (data['itemName'] ?? '').toString();
     final unit = (data['unit'] ?? '').toString();
-    final date = data['date'] as Timestamp?;
+    DateTime selectedDate = DateTime.now();
+
+    final currentDate = data['date'];
+
+    if (currentDate is Timestamp) {
+      selectedDate = currentDate.toDate();
+    }
 
     double openingQty = 0;
 
@@ -361,11 +367,32 @@ class InventoryTransactionsScreen extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 8),
-                  Text(
-                    'التاريخ: ${_formatDate(date)}',
-                    style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                    ),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          'التاريخ: ${selectedDate.year}-${selectedDate.month}-${selectedDate.day}',
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                      TextButton(
+                        onPressed: () async {
+                          final pickedDate = await showDatePicker(
+                            context: context,
+                            initialDate: selectedDate,
+                            firstDate: DateTime(2020),
+                            lastDate: DateTime(2100),
+                          );
+
+                          if (pickedDate != null) {
+                            selectedDate = pickedDate;
+                          }
+                        },
+                        child: const Text('تعديل التاريخ'),
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 12),
                   TextField(
@@ -445,6 +472,7 @@ class InventoryTransactionsScreen extends StatelessWidget {
                     .update({
                   'quantity': newQuantity,
                   'description': newDescription,
+                  'date': Timestamp.fromDate(selectedDate),
                   'updatedAt': Timestamp.now(),
                 });
 
