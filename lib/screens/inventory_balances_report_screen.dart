@@ -66,18 +66,27 @@ class _InventoryBalancesReportScreenState
           ) ??
           0;
 
+      final minimumQty = double.tryParse(
+            (data['minimumQty'] ?? 0).toString(),
+          ) ??
+          0;
+
       final totalAdd = totalAddByItem[code] ?? 0;
       final totalIssue = totalIssueByItem[code] ?? 0;
       final currentBalance = openingQty + totalAdd - totalIssue;
+
+      final isLowStock = minimumQty > 0 && currentBalance < minimumQty;
 
       return {
         'code': code,
         'name': name,
         'unit': unit,
         'openingQty': openingQty,
+        'minimumQty': minimumQty,
         'totalAdd': totalAdd,
         'totalIssue': totalIssue,
         'currentBalance': currentBalance,
+        'isLowStock': isLowStock,
       };
     }).toList();
   }
@@ -146,16 +155,25 @@ class _InventoryBalancesReportScreenState
                 final name = row['name'];
                 final unit = row['unit'];
                 final openingQty = row['openingQty'];
+                final minimumQty = row['minimumQty'];
                 final totalAdd = row['totalAdd'];
                 final totalIssue = row['totalIssue'];
                 final currentBalance = row['currentBalance'];
+                final isLowStock = row['isLowStock'] == true;
 
                 return Card(
+                  color: isLowStock ? Colors.red.shade50 : null,
                   margin: const EdgeInsets.symmetric(
                     vertical: 6,
                     horizontal: 4,
                   ),
                   child: ListTile(
+                    leading: Icon(
+                      isLowStock
+                          ? Icons.warning_amber
+                          : Icons.inventory,
+                      color: isLowStock ? Colors.red : Colors.green,
+                    ),
                     title: Text(
                       '$code - $name',
                       style: const TextStyle(
@@ -164,17 +182,11 @@ class _InventoryBalancesReportScreenState
                     ),
                     subtitle: Text(
                       'الرصيد الافتتاحي: ${_formatNumber(openingQty)} $unit\n'
+                      'الحد الأدنى: ${_formatNumber(minimumQty)} $unit\n'
                       'إجمالي الإضافات: ${_formatNumber(totalAdd)} $unit\n'
                       'إجمالي الصرف: ${_formatNumber(totalIssue)} $unit\n'
-                      'الرصيد الحالي: ${_formatNumber(currentBalance)} $unit',
-                    ),
-                    trailing: Icon(
-                      Icons.inventory,
-                      color: currentBalance > 0
-                          ? Colors.green
-                          : currentBalance < 0
-                              ? Colors.red
-                              : Colors.grey,
+                      'الرصيد الحالي: ${_formatNumber(currentBalance)} $unit\n'
+                      'الحالة: ${isLowStock ? 'منخفض' : 'جيد'}',
                     ),
                   ),
                 );

@@ -9,6 +9,7 @@ class InventoryItemsScreen extends StatelessWidget {
     final nameController = TextEditingController();
     final unitController = TextEditingController();
     final openingQtyController = TextEditingController(text: '0');
+    final minimumQtyController = TextEditingController(text: '0');
 
     await showDialog(
       context: context,
@@ -53,6 +54,15 @@ class InventoryItemsScreen extends StatelessWidget {
                     ),
                     keyboardType: TextInputType.number,
                   ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: minimumQtyController,
+                    decoration: const InputDecoration(
+                      labelText: 'الحد الأدنى للمخزون',
+                      border: OutlineInputBorder(),
+                    ),
+                    keyboardType: TextInputType.number,
+                  ),
                 ],
               ),
             ),
@@ -67,8 +77,12 @@ class InventoryItemsScreen extends StatelessWidget {
                 final code = codeController.text.trim();
                 final name = nameController.text.trim();
                 final unit = unitController.text.trim();
+
                 final openingQty =
                     double.tryParse(openingQtyController.text.trim()) ?? 0;
+
+                final minimumQty =
+                    double.tryParse(minimumQtyController.text.trim()) ?? 0;
 
                 if (code.isEmpty) {
                   ScaffoldMessenger.of(context).showSnackBar(
@@ -92,6 +106,15 @@ class InventoryItemsScreen extends StatelessWidget {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
                       content: Text('يجب إدخال وحدة القياس'),
+                    ),
+                  );
+                  return;
+                }
+
+                if (minimumQty < 0) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('الحد الأدنى لا يمكن أن يكون أقل من صفر'),
                     ),
                   );
                   return;
@@ -123,6 +146,7 @@ class InventoryItemsScreen extends StatelessWidget {
                   'name': name,
                   'unit': unit,
                   'openingQty': openingQty,
+                  'minimumQty': minimumQty,
                   'createdAt': Timestamp.now(),
                 });
 
@@ -157,6 +181,10 @@ class InventoryItemsScreen extends StatelessWidget {
 
     final openingQtyController = TextEditingController(
       text: (data['openingQty'] ?? 0).toString(),
+    );
+
+    final minimumQtyController = TextEditingController(
+      text: (data['minimumQty'] ?? 0).toString(),
     );
 
     final oldCode = (data['code'] ?? '').toString();
@@ -204,6 +232,15 @@ class InventoryItemsScreen extends StatelessWidget {
                     ),
                     keyboardType: TextInputType.number,
                   ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: minimumQtyController,
+                    decoration: const InputDecoration(
+                      labelText: 'الحد الأدنى للمخزون',
+                      border: OutlineInputBorder(),
+                    ),
+                    keyboardType: TextInputType.number,
+                  ),
                 ],
               ),
             ),
@@ -218,8 +255,12 @@ class InventoryItemsScreen extends StatelessWidget {
                 final newCode = codeController.text.trim();
                 final newName = nameController.text.trim();
                 final newUnit = unitController.text.trim();
+
                 final newOpeningQty =
                     double.tryParse(openingQtyController.text.trim()) ?? 0;
+
+                final newMinimumQty =
+                    double.tryParse(minimumQtyController.text.trim()) ?? 0;
 
                 if (newCode.isEmpty) {
                   ScaffoldMessenger.of(context).showSnackBar(
@@ -243,6 +284,15 @@ class InventoryItemsScreen extends StatelessWidget {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
                       content: Text('يجب إدخال وحدة القياس'),
+                    ),
+                  );
+                  return;
+                }
+
+                if (newMinimumQty < 0) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('الحد الأدنى لا يمكن أن يكون أقل من صفر'),
                     ),
                   );
                   return;
@@ -277,6 +327,7 @@ class InventoryItemsScreen extends StatelessWidget {
                   'name': newName,
                   'unit': newUnit,
                   'openingQty': newOpeningQty,
+                  'minimumQty': newMinimumQty,
                   'updatedAt': Timestamp.now(),
                 });
 
@@ -324,6 +375,7 @@ class InventoryItemsScreen extends StatelessWidget {
           .delete();
     }
   }
+
   Future<Map<String, double>> _calculateItemBalance(
     String itemCode,
     double openingQty,
@@ -364,6 +416,16 @@ class InventoryItemsScreen extends StatelessWidget {
       'totalIssue': totalIssue,
       'currentBalance': currentBalance,
     };
+  }
+
+  String _formatNumber(dynamic value) {
+    final number = double.tryParse(value.toString()) ?? 0;
+
+    if (number == number.roundToDouble()) {
+      return number.toInt().toString();
+    }
+
+    return number.toStringAsFixed(2);
   }
 
   @override
@@ -413,8 +475,14 @@ class InventoryItemsScreen extends StatelessWidget {
                 final code = data['code'] ?? '';
                 final name = data['name'] ?? '';
                 final unit = data['unit'] ?? '';
+
                 final openingQty = double.tryParse(
                       (data['openingQty'] ?? 0).toString(),
+                    ) ??
+                    0;
+
+                final minimumQty = double.tryParse(
+                      (data['minimumQty'] ?? 0).toString(),
                     ) ??
                     0;
 
@@ -428,40 +496,52 @@ class InventoryItemsScreen extends StatelessWidget {
 
                     final totalAdd = balanceData?['totalAdd'] ?? 0;
                     final totalIssue = balanceData?['totalIssue'] ?? 0;
-                    final currentBalance = balanceData?['currentBalance'] ?? openingQty;
+                    final currentBalance =
+                        balanceData?['currentBalance'] ?? openingQty;
+
+                    final isLowStock =
+                        minimumQty > 0 && currentBalance < minimumQty;
 
                     return Card(
+                      color: isLowStock ? Colors.red.shade50 : null,
                       margin: const EdgeInsets.all(8),
                       child: ListTile(
-                        leading: const Icon(Icons.inventory),
+                        leading: Icon(
+                          isLowStock
+                              ? Icons.warning_amber
+                              : Icons.inventory,
+                          color: isLowStock ? Colors.red : Colors.green,
+                        ),
                         title: Text('$code - $name'),
                         subtitle: Text(
                           'الوحدة: $unit\n'
-                          'الرصيد الافتتاحي: $openingQty\n'
-                          'إجمالي الإضافة: $totalAdd\n'
-                          'إجمالي الصرف: $totalIssue\n'
-                          'الرصيد الحالي: $currentBalance',
+                          'الرصيد الافتتاحي: ${_formatNumber(openingQty)}\n'
+                          'الحد الأدنى: ${_formatNumber(minimumQty)}\n'
+                          'إجمالي الإضافة: ${_formatNumber(totalAdd)}\n'
+                          'إجمالي الصرف: ${_formatNumber(totalIssue)}\n'
+                          'الرصيد الحالي: ${_formatNumber(currentBalance)}\n'
+                          'الحالة: ${isLowStock ? 'منخفض' : 'جيد'}',
                         ),
                         trailing: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        IconButton(
-                          icon: const Icon(Icons.edit),
-                          onPressed: () {
-                            _editItem(
-                              context,
-                              documentId,
-                              data,
-                            );
-                          },
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.delete),
-                          onPressed: () {
-                            _deleteItem(
-                              context,
-                              documentId,
-                              name.toString(),
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            IconButton(
+                              icon: const Icon(Icons.edit),
+                              onPressed: () {
+                                _editItem(
+                                  context,
+                                  documentId,
+                                  data,
+                                );
+                              },
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.delete),
+                              onPressed: () {
+                                _deleteItem(
+                                  context,
+                                  documentId,
+                                  name.toString(),
                                 );
                               },
                             ),
