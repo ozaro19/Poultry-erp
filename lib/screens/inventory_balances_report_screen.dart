@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:printing/printing.dart';
 
 class InventoryBalancesReportScreen extends StatefulWidget {
   const InventoryBalancesReportScreen({super.key});
@@ -108,6 +111,123 @@ class _InventoryBalancesReportScreenState
       reportFuture = _loadBalancesReport();
     });
   }
+  Future<void> _printReport() async {
+    final rows = await _loadBalancesReport();
+
+    final filteredRows = showLowStockOnly
+        ? rows.where((row) => row['isLowStock'] == true).toList()
+        : rows;
+
+    if (filteredRows.isEmpty) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('لا توجد بيانات للطباعة'),
+        ),
+      );
+      return;
+    }
+
+    final regularFont = await PdfGoogleFonts.cairoRegular();
+    final boldFont = await PdfGoogleFonts.cairoBold();
+
+    final pdf = pw.Document();
+
+    pw.Widget tableCell(
+      String text, {
+      bool isHeader = false,
+      PdfColor? color,
+    }) {
+      return pw.Padding(
+        padding: const pw.EdgeInsets.all(4),
+        child: pw.Text(
+          text,
+          textAlign: pw.TextAlign.center,
+          style: pw.TextStyle(
+            fontSize: isHeader ? 9 : 8,
+            fontWeight: isHeader ? pw.FontWeight.bold : null,
+            color: color ?? PdfColors.black,
+          ),
+        ),
+      );
+    }
+
+    pdf.addPage(
+      pw.MultiPage(
+        pageFormat: PdfPageFormat.a4.landscape,
+        textDirection: pw.TextDirection.rtl,
+        theme: pw.ThemeData.withFont(
+          base: regularFont,
+          bold: boldFont,
+        ),
+        build: (context) {
+          return [
+            pw.Center(
+              child: pw.Text(
+                showLowStockOnly
+                    ? 'تقرير الأصناف منخفضة الرصيد'
+                    : 'تقرير أرصدة المخزون',
+                style: pw.TextStyle(
+                  fontSize: 18,
+                  fontWeight: pw.FontWeight.bold,
+                ),
+              ),
+            ),
+            pw.SizedBox(height: 16),
+            pw.Table(
+              border: pw.TableBorder.all(
+                color: PdfColors.grey,
+                width: 0.5,
+              ),
+              children: [
+                pw.TableRow(
+                  decoration: const pw.BoxDecoration(
+                    color: PdfColors.grey300,
+                  ),
+                  children: [
+                    tableCell('الحالة', isHeader: true),
+                    tableCell('الرصيد الحالي', isHeader: true),
+                    tableCell('إجمالي الصرف', isHeader: true),
+                    tableCell('إجمالي الإضافات', isHeader: true),
+                    tableCell('الحد الأدنى', isHeader: true),
+                    tableCell('الرصيد الافتتاحي', isHeader: true),
+                    tableCell('الوحدة', isHeader: true),
+                    tableCell('اسم الصنف', isHeader: true),
+                    tableCell('الكود', isHeader: true),
+                  ],
+                ),
+                ...filteredRows.map((row) {
+                  final isLowStock = row['isLowStock'] == true;
+
+                  return pw.TableRow(
+                    children: [
+                      tableCell(
+                        isLowStock ? 'منخفض' : 'جيد',
+                        color: isLowStock ? PdfColors.red : PdfColors.green,
+                      ),
+                      tableCell(_formatNumber(row['currentBalance'])),
+                      tableCell(_formatNumber(row['totalIssue'])),
+                      tableCell(_formatNumber(row['totalAdd'])),
+                      tableCell(_formatNumber(row['minimumQty'])),
+                      tableCell(_formatNumber(row['openingQty'])),
+                      tableCell(row['unit'].toString()),
+                      tableCell(row['name'].toString()),
+                      tableCell(row['code'].toString()),
+                    ],
+                  );
+                }),
+              ],
+            ),
+          ];
+        },
+      ),
+    );
+
+    await Printing.layoutPdf(
+      onLayout: (format) async => pdf.save(),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -135,6 +255,11 @@ class _InventoryBalancesReportScreenState
                   showLowStockOnly = !showLowStockOnly;
                 });
               },
+            ),
+            IconButton(
+              tooltip: 'طباعة PDF',
+              icon: const Icon(Icons.picture_as_pdf),
+              onPressed: _printReport,
             ),
             IconButton(
               tooltip: 'تحديث التقرير',
