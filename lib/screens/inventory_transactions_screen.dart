@@ -265,6 +265,7 @@ class _InventoryTransactionsScreenState
                         selectedItemOpeningQty,
                       );
 
+                      if (!context.mounted) return;
                       if (quantity > currentBalance) {
                         ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(
@@ -498,11 +499,13 @@ class _InventoryTransactionsScreenState
 
                 if (transactionType == 'صرف') {
                   final currentBalance =
-                      await _calculateCurrentItemBalance(
-                    selectedItemCode!,
-                    openingQty,
-                    excludeDocumentId: documentId,
-                  );
+                    await _calculateCurrentItemBalance(
+                  selectedItemCode!,
+                  openingQty,
+                  excludeDocumentId: documentId,
+                );
+
+                if (!context.mounted) return;
 
                   if (newQuantity > currentBalance) {
                     ScaffoldMessenger.of(context).showSnackBar(
