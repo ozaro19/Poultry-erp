@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'item_card_report_screen.dart';
+import 'inventory_balances_report_screen.dart';
 
 class InventoryTransactionsScreen extends StatefulWidget {
   const InventoryTransactionsScreen({super.key});
@@ -614,6 +615,18 @@ class _InventoryTransactionsScreenState
                   context,
                   MaterialPageRoute(
                     builder: (context) => const ItemCardReportScreen(),
+                  ),
+                );
+              },
+            ),
+            IconButton(
+              tooltip: 'تقرير أرصدة المخزون',
+              icon: const Icon(Icons.assessment),
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const InventoryBalancesReportScreen(),
                   ),
                 );
               },
