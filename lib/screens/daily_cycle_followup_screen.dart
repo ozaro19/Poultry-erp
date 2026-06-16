@@ -52,6 +52,62 @@ class _DailyCycleFollowupScreenState extends State<DailyCycleFollowupScreen> {
     return cycles;
   }
 
+  Future<List<Map<String, dynamic>>> _loadInventoryItems() async {
+    final snapshot = await FirebaseFirestore.instance
+        .collection('inventory_items')
+        .orderBy('code')
+        .get();
+
+    return snapshot.docs.map((doc) {
+      final data = doc.data();
+
+      return {
+        'id': doc.id,
+        ...data,
+      };
+    }).toList();
+  }
+
+  Future<double> _calculateCurrentItemBalance(
+    String itemCode,
+    double openingQty, {
+    String? excludeDocumentId,
+  }) async {
+    final transactionsSnapshot = await FirebaseFirestore.instance
+        .collection('inventory_transactions')
+        .where(
+          'itemCode',
+          isEqualTo: itemCode,
+        )
+        .get();
+
+    double totalAdd = 0;
+    double totalIssue = 0;
+
+    for (final doc in transactionsSnapshot.docs) {
+      if (excludeDocumentId != null && doc.id == excludeDocumentId) {
+        continue;
+      }
+
+      final data = doc.data();
+
+      final type = (data['type'] ?? '').toString();
+
+      final quantity = double.tryParse(
+            (data['quantity'] ?? 0).toString(),
+          ) ??
+          0;
+
+      if (type == 'add') {
+        totalAdd += quantity;
+      } else if (type == 'issue') {
+        totalIssue += quantity;
+      }
+    }
+
+    return openingQty + totalAdd - totalIssue;
+  }
+
     Future<void> _addDailyFollowup(BuildContext context) async {
     final mortalityController = TextEditingController(text: '0');
     final feedQtyController = TextEditingController(text: '0');
@@ -60,11 +116,17 @@ class _DailyCycleFollowupScreenState extends State<DailyCycleFollowupScreen> {
 
     DateTime selectedDate = DateTime.now();
 
-    String? selectedCycleId;
+        String? selectedCycleId;
     String selectedCycleCode = '';
     String selectedCycleName = '';
 
+    String? selectedFeedItemCode;
+    String selectedFeedItemName = '';
+    String selectedFeedItemUnit = '';
+    double selectedFeedItemOpeningQty = 0;
+
     final cycles = await _loadActiveCycles();
+    final inventoryItems = await _loadInventoryItems();
 
     if (!context.mounted) return;
 
@@ -159,6 +221,43 @@ class _DailyCycleFollowupScreenState extends State<DailyCycleFollowupScreen> {
                           border: OutlineInputBorder(),
                         ),
                         keyboardType: TextInputType.number,
+                      ),
+                      const SizedBox(height: 12),
+                                            DropdownButtonFormField<String>(
+                        initialValue: selectedFeedItemCode,
+                        decoration: const InputDecoration(
+                          labelText: 'صنف العلف من المخزون',
+                          border: OutlineInputBorder(),
+                        ),
+                        items: inventoryItems.map((item) {
+                          final code = (item['code'] ?? '').toString();
+                          final name = (item['name'] ?? '').toString();
+                          final unit = (item['unit'] ?? '').toString();
+
+                          return DropdownMenuItem(
+                            value: code,
+                            child: Text('$code - $name - $unit'),
+                          );
+                        }).toList(),
+                        onChanged: (value) {
+                          if (value == null) return;
+
+                          final selectedItem = inventoryItems.firstWhere(
+                            (item) => item['code'].toString() == value,
+                          );
+
+                          setState(() {
+                            selectedFeedItemCode = value;
+                            selectedFeedItemName =
+                                (selectedItem['name'] ?? '').toString();
+                            selectedFeedItemUnit =
+                                (selectedItem['unit'] ?? '').toString();
+                            selectedFeedItemOpeningQty = double.tryParse(
+                                  (selectedItem['openingQty'] ?? 0).toString(),
+                                ) ??
+                                0;
+                          });
+                        },
                       ),
                       const SizedBox(height: 12),
                       TextField(
@@ -257,6 +356,39 @@ class _DailyCycleFollowupScreenState extends State<DailyCycleFollowupScreen> {
                       );
                       return;
                     }
+                    if (feedQty > 0 &&
+                        (selectedFeedItemCode == null ||
+                            selectedFeedItemCode!.isEmpty)) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text(
+                            'يجب اختيار صنف العلف من المخزون',
+                          ),
+                        ),
+                      );
+                      return;
+                    }
+
+                    if (feedQty > 0) {
+                      final currentBalance =
+                          await _calculateCurrentItemBalance(
+                        selectedFeedItemCode!,
+                        selectedFeedItemOpeningQty,
+                      );
+
+                      if (!context.mounted) return;
+
+                      if (feedQty > currentBalance) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(
+                              'رصيد العلف غير كاف. الرصيد الحالي: $currentBalance',
+                            ),
+                          ),
+                        );
+                        return;
+                      }
+                    }
 
                     final existingFollowup = await FirebaseFirestore.instance
                         .collection('cycle_daily_followups')
@@ -283,7 +415,7 @@ class _DailyCycleFollowupScreenState extends State<DailyCycleFollowupScreen> {
                       return;
                     }
 
-                    await FirebaseFirestore.instance
+                                        final followupRef = await FirebaseFirestore.instance
                         .collection('cycle_daily_followups')
                         .add({
                       'cycleId': selectedCycleId,
@@ -293,10 +425,40 @@ class _DailyCycleFollowupScreenState extends State<DailyCycleFollowupScreen> {
                       'dateKey': dateKey,
                       'mortality': mortality,
                       'feedQty': feedQty,
+                      'feedItemCode': selectedFeedItemCode ?? '',
+                      'feedItemName': selectedFeedItemName,
+                      'feedItemUnit': selectedFeedItemUnit,
+                      'inventoryTransactionId': '',
                       'averageWeight': averageWeight,
                       'notes': notes,
                       'createdAt': Timestamp.now(),
                     });
+
+                    if (feedQty > 0 &&
+                        selectedFeedItemCode != null &&
+                        (selectedFeedItemCode?.isNotEmpty ?? false)) {
+                      final transactionRef = await FirebaseFirestore.instance
+                          .collection('inventory_transactions')
+                          .add({
+                        'type': 'issue',
+                        'typeName': 'صرف',
+                        'itemCode': selectedFeedItemCode,
+                        'itemName': selectedFeedItemName,
+                        'unit': selectedFeedItemUnit,
+                        'quantity': feedQty,
+                        'date': Timestamp.fromDate(selectedDate),
+                        'description':
+                            'استهلاك علف للدورة $selectedCycleCode - $selectedCycleName',
+                        'source': 'cycle_daily_followup',
+                        'cycleId': selectedCycleId,
+                        'followupId': followupRef.id,
+                        'createdAt': Timestamp.now(),
+                      });
+
+                      await followupRef.update({
+                        'inventoryTransactionId': transactionRef.id,
+                      });
+                    }
 
                     if (context.mounted) {
                       Navigator.pop(context);
@@ -336,9 +498,51 @@ class _DailyCycleFollowupScreenState extends State<DailyCycleFollowupScreen> {
     DateTime selectedDate =
         (data['date'] as Timestamp?)?.toDate() ?? DateTime.now();
 
-    final cycleId = (data['cycleId'] ?? '').toString();
+        final cycleId = (data['cycleId'] ?? '').toString();
     final cycleName = (data['cycleName'] ?? '').toString();
     final cycleCode = (data['cycleCode'] ?? '').toString();
+
+    final inventoryItems = await _loadInventoryItems();
+
+    if (!context.mounted) return;
+
+    final oldFeedItemCode = (data['feedItemCode'] ?? '').toString();
+
+    String? selectedFeedItemCode =
+        oldFeedItemCode.isEmpty ? null : oldFeedItemCode;
+
+    String selectedFeedItemName =
+        (data['feedItemName'] ?? '').toString();
+
+    String selectedFeedItemUnit =
+        (data['feedItemUnit'] ?? '').toString();
+
+    String inventoryTransactionId =
+        (data['inventoryTransactionId'] ?? '').toString();
+
+    double selectedFeedItemOpeningQty = 0;
+
+    if (selectedFeedItemCode != null &&
+    selectedFeedItemCode.isNotEmpty) {
+      for (final item in inventoryItems) {
+        final itemCode = (item['code'] ?? '').toString();
+
+        if (itemCode == selectedFeedItemCode) {
+          selectedFeedItemName =
+              (item['name'] ?? selectedFeedItemName).toString();
+
+          selectedFeedItemUnit =
+              (item['unit'] ?? selectedFeedItemUnit).toString();
+
+          selectedFeedItemOpeningQty = double.tryParse(
+                (item['openingQty'] ?? 0).toString(),
+              ) ??
+              0;
+
+          break;
+        }
+      }
+    }
 
     await showDialog(
       context: context,
@@ -396,6 +600,43 @@ class _DailyCycleFollowupScreenState extends State<DailyCycleFollowupScreen> {
                           border: OutlineInputBorder(),
                         ),
                         keyboardType: TextInputType.number,
+                      ),
+                      const SizedBox(height: 12),
+                                            DropdownButtonFormField<String>(
+                        initialValue: selectedFeedItemCode,
+                        decoration: const InputDecoration(
+                          labelText: 'صنف العلف من المخزون',
+                          border: OutlineInputBorder(),
+                        ),
+                        items: inventoryItems.map((item) {
+                          final code = (item['code'] ?? '').toString();
+                          final name = (item['name'] ?? '').toString();
+                          final unit = (item['unit'] ?? '').toString();
+
+                          return DropdownMenuItem(
+                            value: code,
+                            child: Text('$code - $name - $unit'),
+                          );
+                        }).toList(),
+                        onChanged: (value) {
+                          if (value == null) return;
+
+                          final selectedItem = inventoryItems.firstWhere(
+                            (item) => item['code'].toString() == value,
+                          );
+
+                          setState(() {
+                            selectedFeedItemCode = value;
+                            selectedFeedItemName =
+                                (selectedItem['name'] ?? '').toString();
+                            selectedFeedItemUnit =
+                                (selectedItem['unit'] ?? '').toString();
+                            selectedFeedItemOpeningQty = double.tryParse(
+                                  (selectedItem['openingQty'] ?? 0).toString(),
+                                ) ??
+                                0;
+                          });
+                        },
                       ),
                       const SizedBox(height: 12),
                       TextField(
@@ -461,6 +702,46 @@ class _DailyCycleFollowupScreenState extends State<DailyCycleFollowupScreen> {
                       );
                       return;
                     }
+                                        if (feedQty > 0 &&
+                        (selectedFeedItemCode == null ||
+                            selectedFeedItemCode!.isEmpty)) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text(
+                            'يجب اختيار صنف العلف من المخزون',
+                          ),
+                        ),
+                      );
+                      return;
+                    }
+
+                    if (feedQty > 0) {
+                      final excludeTransactionId =
+                          inventoryTransactionId.isNotEmpty &&
+                                  selectedFeedItemCode == oldFeedItemCode
+                              ? inventoryTransactionId
+                              : null;
+
+                      final currentBalance =
+                          await _calculateCurrentItemBalance(
+                        selectedFeedItemCode!,
+                        selectedFeedItemOpeningQty,
+                        excludeDocumentId: excludeTransactionId,
+                      );
+
+                      if (!context.mounted) return;
+
+                      if (feedQty > currentBalance) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(
+                              'رصيد العلف غير كاف. الرصيد الحالي: $currentBalance',
+                            ),
+                          ),
+                        );
+                        return;
+                      }
+                    }
 
                     final existingFollowup = await FirebaseFirestore.instance
                         .collection('cycle_daily_followups')
@@ -491,18 +772,80 @@ class _DailyCycleFollowupScreenState extends State<DailyCycleFollowupScreen> {
                       return;
                     }
 
-                    await FirebaseFirestore.instance
+                                        final followupDoc = FirebaseFirestore.instance
                         .collection('cycle_daily_followups')
-                        .doc(documentId)
-                        .update({
+                        .doc(documentId);
+
+                    await followupDoc.update({
                       'date': Timestamp.fromDate(selectedDate),
                       'dateKey': dateKey,
                       'mortality': mortality,
                       'feedQty': feedQty,
+                      'feedItemCode':
+                          feedQty > 0 ? selectedFeedItemCode ?? '' : '',
+                      'feedItemName':
+                          feedQty > 0 ? selectedFeedItemName : '',
+                      'feedItemUnit':
+                          feedQty > 0 ? selectedFeedItemUnit : '',
                       'averageWeight': averageWeight,
                       'notes': notes,
                       'updatedAt': Timestamp.now(),
                     });
+
+                    if (feedQty > 0 &&
+                        selectedFeedItemCode != null &&
+                        (selectedFeedItemCode?.isNotEmpty ?? false)) {
+                      final transactionData = {
+                        'type': 'issue',
+                        'typeName': 'صرف',
+                        'itemCode': selectedFeedItemCode,
+                        'itemName': selectedFeedItemName,
+                        'unit': selectedFeedItemUnit,
+                        'quantity': feedQty,
+                        'date': Timestamp.fromDate(selectedDate),
+                        'description':
+                            'استهلاك علف للدورة $cycleCode - $cycleName',
+                        'source': 'cycle_daily_followup',
+                        'cycleId': cycleId,
+                        'followupId': documentId,
+                        'updatedAt': Timestamp.now(),
+                      };
+
+                      if (inventoryTransactionId.isNotEmpty) {
+                        await FirebaseFirestore.instance
+                            .collection('inventory_transactions')
+                            .doc(inventoryTransactionId)
+                            .set(
+                              transactionData,
+                              SetOptions(merge: true),
+                            );
+                      } else {
+                        final transactionRef =
+                            await FirebaseFirestore.instance
+                                .collection('inventory_transactions')
+                                .add({
+                          ...transactionData,
+                          'createdAt': Timestamp.now(),
+                        });
+
+                        inventoryTransactionId = transactionRef.id;
+
+                        await followupDoc.update({
+                          'inventoryTransactionId': inventoryTransactionId,
+                        });
+                      }
+                    } else {
+                      if (inventoryTransactionId.isNotEmpty) {
+                        await FirebaseFirestore.instance
+                            .collection('inventory_transactions')
+                            .doc(inventoryTransactionId)
+                            .delete();
+                      }
+
+                      await followupDoc.update({
+                        'inventoryTransactionId': '',
+                      });
+                    }
 
                     if (context.mounted) {
                       Navigator.pop(context);
@@ -518,41 +861,52 @@ class _DailyCycleFollowupScreenState extends State<DailyCycleFollowupScreen> {
     );
   }
 
-    Future<void> _deleteFollowup(
-    BuildContext context,
-    String documentId,
-    String cycleName,
-    String date,
-  ) async {
-    final result = await showDialog<bool>(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text('تأكيد الحذف'),
-          content: Text(
-            'هل تريد حذف متابعة $cycleName بتاريخ $date ؟',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('إلغاء'),
+     Future<void> _deleteFollowup(
+      BuildContext context,
+      String documentId,
+      String cycleName,
+      String date,
+      Map<String, dynamic> data,
+    ) async {
+      final result = await showDialog<bool>(
+        context: context,
+        builder: (context) {
+          return AlertDialog(
+            title: const Text('تأكيد الحذف'),
+            content: Text(
+              'هل تريد حذف متابعة $cycleName بتاريخ $date ؟',
             ),
-            ElevatedButton(
-              onPressed: () => Navigator.pop(context, true),
-              child: const Text('حذف'),
-            ),
-          ],
-        );
-      },
-    );
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('إلغاء'),
+              ),
+              ElevatedButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: const Text('حذف'),
+              ),
+            ],
+          );
+        },
+      );
 
-    if (result == true) {
-      await FirebaseFirestore.instance
-          .collection('cycle_daily_followups')
-          .doc(documentId)
-          .delete();
+      if (result == true) {
+        final inventoryTransactionId =
+            (data['inventoryTransactionId'] ?? '').toString();
+
+        if (inventoryTransactionId.isNotEmpty) {
+          await FirebaseFirestore.instance
+              .collection('inventory_transactions')
+              .doc(inventoryTransactionId)
+              .delete();
+        }
+
+        await FirebaseFirestore.instance
+            .collection('cycle_daily_followups')
+            .doc(documentId)
+            .delete();
+      }
     }
-  }
 
     @override
   Widget build(BuildContext context) {
@@ -647,6 +1001,7 @@ class _DailyCycleFollowupScreenState extends State<DailyCycleFollowupScreen> {
                               documentId,
                               cycleName,
                               _formatDate(date),
+                              data,
                             );
                           },
                         ),
