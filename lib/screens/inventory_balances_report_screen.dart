@@ -1,5 +1,9 @@
+import 'dart:convert';
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:file_saver/file_saver.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
@@ -104,6 +108,12 @@ class _InventoryBalancesReportScreenState
     }
 
     return number.toStringAsFixed(2);
+  }
+
+  String _csvValue(dynamic value) {
+    final text = value.toString().replaceAll('"', '""');
+
+    return '"$text"';
   }
 
   void _refreshReport() {
@@ -229,6 +239,80 @@ class _InventoryBalancesReportScreenState
     );
   }
 
+  Future<void> _exportCsvReport() async {
+    final rows = await _loadBalancesReport();
+
+    final filteredRows = showLowStockOnly
+        ? rows.where((row) => row['isLowStock'] == true).toList()
+        : rows;
+
+    if (filteredRows.isEmpty) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('لا توجد بيانات للتصدير'),
+        ),
+      );
+      return;
+    }
+
+    final buffer = StringBuffer('\uFEFF');
+
+    buffer.writeln(
+      [
+        'الكود',
+        'اسم الصنف',
+        'الوحدة',
+        'الرصيد الافتتاحي',
+        'الحد الأدنى',
+        'إجمالي الإضافات',
+        'إجمالي الصرف',
+        'الرصيد الحالي',
+        'الحالة',
+      ].map(_csvValue).join(','),
+    );
+
+    for (final row in filteredRows) {
+      final isLowStock = row['isLowStock'] == true;
+
+      buffer.writeln(
+        [
+          row['code'],
+          row['name'],
+          row['unit'],
+          _formatNumber(row['openingQty']),
+          _formatNumber(row['minimumQty']),
+          _formatNumber(row['totalAdd']),
+          _formatNumber(row['totalIssue']),
+          _formatNumber(row['currentBalance']),
+          isLowStock ? 'منخفض' : 'جيد',
+        ].map(_csvValue).join(','),
+      );
+    }
+
+    final bytes = Uint8List.fromList(
+      utf8.encode(buffer.toString()),
+    );
+
+    await FileSaver.instance.saveFile(
+      name: showLowStockOnly
+          ? 'low_stock_report'
+          : 'inventory_balances_report',
+      bytes: bytes,
+      fileExtension: 'csv',
+      mimeType: MimeType.other,
+    );
+
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('تم تصدير ملف Excel CSV بنجاح'),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Directionality(
@@ -255,6 +339,11 @@ class _InventoryBalancesReportScreenState
                   showLowStockOnly = !showLowStockOnly;
                 });
               },
+            ),
+            IconButton(
+              tooltip: 'تصدير Excel CSV',
+              icon: const Icon(Icons.table_chart),
+              onPressed: _exportCsvReport,
             ),
             IconButton(
               tooltip: 'طباعة PDF',
