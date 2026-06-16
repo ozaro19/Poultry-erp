@@ -312,6 +312,212 @@ class _DailyCycleFollowupScreenState extends State<DailyCycleFollowupScreen> {
     );
   }
 
+  Future<void> _editDailyFollowup(
+    BuildContext context,
+    String documentId,
+    Map<String, dynamic> data,
+  ) async {
+    final mortalityController = TextEditingController(
+      text: (data['mortality'] ?? 0).toString(),
+    );
+
+    final feedQtyController = TextEditingController(
+      text: (data['feedQty'] ?? 0).toString(),
+    );
+
+    final averageWeightController = TextEditingController(
+      text: (data['averageWeight'] ?? 0).toString(),
+    );
+
+    final notesController = TextEditingController(
+      text: (data['notes'] ?? '').toString(),
+    );
+
+    DateTime selectedDate =
+        (data['date'] as Timestamp?)?.toDate() ?? DateTime.now();
+
+    final cycleId = (data['cycleId'] ?? '').toString();
+    final cycleName = (data['cycleName'] ?? '').toString();
+    final cycleCode = (data['cycleCode'] ?? '').toString();
+
+    await showDialog(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return AlertDialog(
+              title: const Text('تعديل متابعة يومية'),
+              content: SizedBox(
+                width: 550,
+                child: SingleChildScrollView(
+                  child: Column(
+                    children: [
+                      Text(
+                        'الدورة: $cycleCode - $cycleName',
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              'التاريخ: ${selectedDate.year}-${selectedDate.month}-${selectedDate.day}',
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                          TextButton(
+                            onPressed: () async {
+                              final pickedDate = await showDatePicker(
+                                context: context,
+                                initialDate: selectedDate,
+                                firstDate: DateTime(2020),
+                                lastDate: DateTime(2100),
+                              );
+
+                              if (pickedDate != null) {
+                                setState(() {
+                                  selectedDate = pickedDate;
+                                });
+                              }
+                            },
+                            child: const Text('تغيير التاريخ'),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: mortalityController,
+                        decoration: const InputDecoration(
+                          labelText: 'النفوق اليومي',
+                          border: OutlineInputBorder(),
+                        ),
+                        keyboardType: TextInputType.number,
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: feedQtyController,
+                        decoration: const InputDecoration(
+                          labelText: 'استهلاك العلف',
+                          border: OutlineInputBorder(),
+                        ),
+                        keyboardType: TextInputType.number,
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: averageWeightController,
+                        decoration: const InputDecoration(
+                          labelText: 'الوزن المتوسط',
+                          border: OutlineInputBorder(),
+                        ),
+                        keyboardType: TextInputType.number,
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: notesController,
+                        decoration: const InputDecoration(
+                          labelText: 'ملاحظات',
+                          border: OutlineInputBorder(),
+                        ),
+                        maxLines: 3,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('إلغاء'),
+                ),
+                ElevatedButton(
+                  onPressed: () async {
+                    final mortality = int.tryParse(
+                          mortalityController.text.trim(),
+                        ) ??
+                        0;
+
+                    final feedQty = double.tryParse(
+                          feedQtyController.text.trim(),
+                        ) ??
+                        0;
+
+                    final averageWeight = double.tryParse(
+                          averageWeightController.text.trim(),
+                        ) ??
+                        0;
+
+                    final notes = notesController.text.trim();
+                    final dateKey = _dateKey(selectedDate);
+
+                    if (mortality < 0 || feedQty < 0 || averageWeight < 0) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('لا يمكن إدخال أرقام أقل من صفر'),
+                        ),
+                      );
+                      return;
+                    }
+
+                    final existingFollowup = await FirebaseFirestore.instance
+                        .collection('cycle_daily_followups')
+                        .where(
+                          'cycleId',
+                          isEqualTo: cycleId,
+                        )
+                        .where(
+                          'dateKey',
+                          isEqualTo: dateKey,
+                        )
+                        .get();
+
+                    if (!context.mounted) return;
+
+                    final duplicateExists = existingFollowup.docs.any(
+                      (doc) => doc.id != documentId,
+                    );
+
+                    if (duplicateExists) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text(
+                            'يوجد سجل متابعة آخر لنفس الدورة في نفس اليوم',
+                          ),
+                        ),
+                      );
+                      return;
+                    }
+
+                    await FirebaseFirestore.instance
+                        .collection('cycle_daily_followups')
+                        .doc(documentId)
+                        .update({
+                      'date': Timestamp.fromDate(selectedDate),
+                      'dateKey': dateKey,
+                      'mortality': mortality,
+                      'feedQty': feedQty,
+                      'averageWeight': averageWeight,
+                      'notes': notes,
+                      'updatedAt': Timestamp.now(),
+                    });
+
+                    if (context.mounted) {
+                      Navigator.pop(context);
+                    }
+                  },
+                  child: const Text('حفظ التعديل'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
     Future<void> _deleteFollowup(
     BuildContext context,
     String documentId,
@@ -420,16 +626,31 @@ class _DailyCycleFollowupScreenState extends State<DailyCycleFollowupScreen> {
                       'الوزن المتوسط: $averageWeight\n'
                       'ملاحظات: $notes',
                     ),
-                    trailing: IconButton(
-                      icon: const Icon(Icons.delete),
-                      onPressed: () {
-                        _deleteFollowup(
-                          context,
-                          documentId,
-                          cycleName,
-                          _formatDate(date),
-                        );
-                      },
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(
+                          icon: const Icon(Icons.edit),
+                          onPressed: () {
+                            _editDailyFollowup(
+                              context,
+                              documentId,
+                              data,
+                            );
+                          },
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.delete),
+                          onPressed: () {
+                            _deleteFollowup(
+                              context,
+                              documentId,
+                              cycleName,
+                              _formatDate(date),
+                            );
+                          },
+                        ),
+                      ],
                     ),
                   ),
                 );
