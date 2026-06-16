@@ -13,6 +13,8 @@ class _InventoryBalancesReportScreenState
     extends State<InventoryBalancesReportScreen> {
   late Future<List<Map<String, dynamic>>> reportFuture;
 
+  bool showLowStockOnly = false;
+
   @override
   void initState() {
     super.initState();
@@ -113,8 +115,27 @@ class _InventoryBalancesReportScreenState
       textDirection: TextDirection.rtl,
       child: Scaffold(
         appBar: AppBar(
-          title: const Text('تقرير أرصدة المخزون'),
+          title: Text(
+            showLowStockOnly
+                ? 'الأصناف منخفضة الرصيد'
+                : 'تقرير أرصدة المخزون',
+          ),
           actions: [
+            IconButton(
+              tooltip: showLowStockOnly
+                  ? 'عرض كل الأصناف'
+                  : 'عرض الأصناف منخفضة الرصيد فقط',
+              icon: Icon(
+                showLowStockOnly
+                    ? Icons.inventory
+                    : Icons.warning_amber,
+              ),
+              onPressed: () {
+                setState(() {
+                  showLowStockOnly = !showLowStockOnly;
+                });
+              },
+            ),
             IconButton(
               tooltip: 'تحديث التقرير',
               icon: const Icon(Icons.refresh),
@@ -145,11 +166,21 @@ class _InventoryBalancesReportScreenState
               );
             }
 
+            final filteredRows = showLowStockOnly
+                ? rows.where((row) => row['isLowStock'] == true).toList()
+                : rows;
+
+            if (filteredRows.isEmpty) {
+              return const Center(
+                child: Text('لا توجد أصناف منخفضة الرصيد حاليًا'),
+              );
+            }
+
             return ListView.builder(
               padding: const EdgeInsets.all(8),
-              itemCount: rows.length,
+              itemCount: filteredRows.length,
               itemBuilder: (context, index) {
-                final row = rows[index];
+                final row = filteredRows[index];
 
                 final code = row['code'];
                 final name = row['name'];
