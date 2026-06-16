@@ -6,6 +6,7 @@ import 'trial_balance_screen.dart';
 import 'cash_screen.dart';
 import 'inventory_items_screen.dart';
 import 'inventory_transactions_screen.dart';
+import 'fattening_cycles_screen.dart';
 
 class DashboardScreen extends StatelessWidget {
   const DashboardScreen({super.key});
@@ -115,7 +116,14 @@ class DashboardScreen extends StatelessWidget {
             _MenuCard(
               'دورات التسمين',
               Icons.agriculture,
-              () {},
+              () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const FatteningCyclesScreen(),
+                  ),
+                );
+              },
             ),
             _MenuCard(
               'الأصول',
