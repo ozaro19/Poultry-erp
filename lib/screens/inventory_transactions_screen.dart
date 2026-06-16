@@ -1,8 +1,21 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-class InventoryTransactionsScreen extends StatelessWidget {
+class InventoryTransactionsScreen extends StatefulWidget {
   const InventoryTransactionsScreen({super.key});
+
+  @override
+  State<InventoryTransactionsScreen> createState() =>
+      _InventoryTransactionsScreenState();
+}
+
+class _InventoryTransactionsScreenState
+    extends State<InventoryTransactionsScreen> {
+  String transactionSearchQuery = '';
+  String transactionTypeFilter = 'الكل';
+
+  DateTime? fromDate;
+  DateTime? toDate;
 
   String _formatDate(Timestamp? timestamp) {
     if (timestamp == null) return '';
@@ -589,8 +602,124 @@ class InventoryTransactionsScreen extends StatelessWidget {
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(
-        appBar: AppBar(
+       appBar: AppBar(
           title: const Text('حركات المخزون'),
+          bottom: PreferredSize(
+            preferredSize: const Size.fromHeight(195),
+            child: Padding(
+              padding: const EdgeInsets.all(8),
+              child: Column(
+                children: [
+                  TextField(
+                    decoration: const InputDecoration(
+                      labelText: 'بحث بالصنف أو البيان أو نوع الحركة',
+                      prefixIcon: Icon(Icons.search),
+                      filled: true,
+                      fillColor: Colors.white,
+                      border: OutlineInputBorder(),
+                    ),
+                    onChanged: (value) {
+                      setState(() {
+                        transactionSearchQuery = value.trim().toLowerCase();
+                      });
+                    },
+                  ),
+                  const SizedBox(height: 8),
+                  DropdownButtonFormField<String>(
+                    initialValue: transactionTypeFilter,
+                    decoration: const InputDecoration(
+                      labelText: 'نوع الحركة',
+                      filled: true,
+                      fillColor: Colors.white,
+                      border: OutlineInputBorder(),
+                    ),
+                    items: const [
+                      DropdownMenuItem(
+                        value: 'الكل',
+                        child: Text('كل الحركات'),
+                      ),
+                      DropdownMenuItem(
+                        value: 'إضافة',
+                        child: Text('إضافة فقط'),
+                      ),
+                      DropdownMenuItem(
+                        value: 'صرف',
+                        child: Text('صرف فقط'),
+                      ),
+                    ],
+                    onChanged: (value) {
+                      if (value == null) return;
+
+                      setState(() {
+                        transactionTypeFilter = value;
+                      });
+                    },
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: () async {
+                            final pickedDate = await showDatePicker(
+                              context: context,
+                              initialDate: fromDate ?? DateTime.now(),
+                              firstDate: DateTime(2020),
+                              lastDate: DateTime(2100),
+                            );
+
+                            if (pickedDate != null && mounted) {
+                              setState(() {
+                                fromDate = pickedDate;
+                              });
+                            }
+                          },
+                          child: Text(
+                            fromDate == null
+                                ? 'من تاريخ'
+                                : '${fromDate!.year}-${fromDate!.month}-${fromDate!.day}',
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: () async {
+                            final pickedDate = await showDatePicker(
+                              context: context,
+                              initialDate: toDate ?? DateTime.now(),
+                              firstDate: DateTime(2020),
+                              lastDate: DateTime(2100),
+                            );
+
+                            if (pickedDate != null && mounted) {
+                              setState(() {
+                                toDate = pickedDate;
+                              });
+                            }
+                          },
+                          child: Text(
+                            toDate == null
+                                ? 'إلى تاريخ'
+                                : '${toDate!.year}-${toDate!.month}-${toDate!.day}',
+                          ),
+                        ),
+                      ),
+                      IconButton(
+                        onPressed: () {
+                          setState(() {
+                            fromDate = null;
+                            toDate = null;
+                          });
+                        },
+                        icon: const Icon(Icons.clear),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
         ),
         floatingActionButton: FloatingActionButton(
           onPressed: () => _addInventoryTransaction(context),
@@ -616,17 +745,66 @@ class InventoryTransactionsScreen extends StatelessWidget {
 
             final docs = snapshot.data!.docs;
 
+            final filteredDocs = docs.where((doc) {
+              final data = doc.data() as Map<String, dynamic>;
+
+              final itemCode = (data['itemCode'] ?? '').toString().toLowerCase();
+              final itemName = (data['itemName'] ?? '').toString().toLowerCase();
+              final description = (data['description'] ?? '').toString().toLowerCase();
+              final typeName = (data['typeName'] ?? '').toString().toLowerCase();
+              final dateValue = data['date'];
+
+              DateTime? transactionDate;
+
+              if (dateValue is Timestamp) {
+                transactionDate = dateValue.toDate();
+              }
+              final matchesSearch = itemCode.contains(transactionSearchQuery) ||
+                  itemName.contains(transactionSearchQuery) ||
+                  description.contains(transactionSearchQuery) ||
+                  typeName.contains(transactionSearchQuery);
+
+              final matchesType = transactionTypeFilter == 'الكل' ||
+                  typeName == transactionTypeFilter;
+
+              final matchesFromDate = fromDate == null ||
+    (transactionDate != null &&
+        !transactionDate.isBefore(
+          DateTime(fromDate!.year, fromDate!.month, fromDate!.day),
+        ));
+
+              final matchesToDate = toDate == null ||
+                  (transactionDate != null &&
+                      !transactionDate.isAfter(
+                        DateTime(
+                          toDate!.year,
+                          toDate!.month,
+                          toDate!.day,
+                          23,
+                          59,
+                          59,
+                        ),
+                      ));
+
+              return matchesSearch && matchesType && matchesFromDate && matchesToDate;
+            }).toList();
+
             if (docs.isEmpty) {
               return const Center(
                 child: Text('لا توجد حركات مخزون حتى الآن'),
               );
             }
+            if (filteredDocs.isEmpty) {
+              return const Center(
+                child: Text('لا توجد نتائج مطابقة للبحث'),
+              );
+            }
 
             return ListView.builder(
-              itemCount: docs.length,
+              itemCount: filteredDocs.length,
               itemBuilder: (context, index) {
-                final data = docs[index].data() as Map<String, dynamic>;
-                final documentId = docs[index].id;
+                final data = filteredDocs[index].data() as Map<String, dynamic>;
+                final documentId = filteredDocs[index].id;
 
                 final type = (data['type'] ?? '').toString();
                 final typeName = (data['typeName'] ?? '').toString();
