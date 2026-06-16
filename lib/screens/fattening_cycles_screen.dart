@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'daily_cycle_followup_screen.dart';
 
 class FatteningCyclesScreen extends StatefulWidget {
   const FatteningCyclesScreen({super.key});
@@ -525,6 +526,20 @@ class _FatteningCyclesScreenState extends State<FatteningCyclesScreen> {
       child: Scaffold(
         appBar: AppBar(
           title: const Text('دورات التسمين'),
+          actions: [
+            IconButton(
+              tooltip: 'المتابعة اليومية',
+              icon: const Icon(Icons.calendar_month),
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const DailyCycleFollowupScreen(),
+                  ),
+                );
+              },
+            ),
+          ],
         ),
         floatingActionButton: FloatingActionButton(
           onPressed: () => _addCycle(context),
