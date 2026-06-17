@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:printing/printing.dart';
 
 class CycleSummaryReportScreen extends StatefulWidget {
   const CycleSummaryReportScreen({super.key});
@@ -420,6 +423,202 @@ class _CycleSummaryReportScreenState extends State<CycleSummaryReportScreen> {
       ],
     );
   }
+  Future<void> _printReport() async {
+    if (_selectedCycleId == null || _selectedCycle == null) {
+      return;
+    }
+
+    final followupSnapshot = await FirebaseFirestore.instance
+        .collection('cycle_daily_followups')
+        .where(
+          'cycleId',
+          isEqualTo: _selectedCycleId,
+        )
+        .get();
+
+    final expenseSnapshot = await FirebaseFirestore.instance
+        .collection('cycle_expenses')
+        .where(
+          'cycleId',
+          isEqualTo: _selectedCycleId,
+        )
+        .get();
+
+    final salesSnapshot = await FirebaseFirestore.instance
+        .collection('cycle_sales')
+        .where(
+          'cycleId',
+          isEqualTo: _selectedCycleId,
+        )
+        .get();
+
+    final followupRecords = followupSnapshot.docs.map((doc) {
+      return doc.data();
+    }).toList();
+
+    followupRecords.sort((a, b) {
+      final dateA =
+          (a['date'] as Timestamp?)?.toDate() ?? DateTime(1900);
+      final dateB =
+          (b['date'] as Timestamp?)?.toDate() ?? DateTime(1900);
+
+      return dateA.compareTo(dateB);
+    });
+
+    final expenseRecords = expenseSnapshot.docs.map((doc) {
+      return doc.data();
+    }).toList();
+
+    final saleRecords = salesSnapshot.docs.map((doc) {
+      return doc.data();
+    }).toList();
+        final cycleCode = (_selectedCycle!['code'] ?? '').toString();
+    final cycleName = (_selectedCycle!['name'] ?? '').toString();
+    final breed = (_selectedCycle!['breed'] ?? '').toString();
+    final status = (_selectedCycle!['status'] ?? '').toString();
+
+    final startDate = _selectedCycle!['startDate'] as Timestamp?;
+    final initialChicks = _toInt(_selectedCycle!['chicksCount']);
+
+    final totalMortality = followupRecords.fold<int>(
+      0,
+      (total, record) => total + _toInt(record['mortality']),
+    );
+
+    final totalFeed = followupRecords.fold<double>(
+      0,
+      (total, record) => total + _toDouble(record['feedQty']),
+    );
+
+    final remainingChicks = initialChicks - totalMortality;
+
+    final mortalityRate = initialChicks == 0
+        ? 0.0
+        : (totalMortality / initialChicks) * 100;
+
+    final latestAverageWeight = followupRecords.isEmpty
+        ? 0.0
+        : _toDouble(followupRecords.last['averageWeight']);
+
+    final latestFollowupDate = followupRecords.isEmpty
+        ? 'لا يوجد'
+        : _formatDate(followupRecords.last['date'] as Timestamp?);
+
+    final daysFromStart = startDate == null
+        ? 0
+        : DateTime.now().difference(startDate.toDate()).inDays + 1;
+
+    final totalExpenses = expenseRecords.fold<double>(
+      0,
+      (total, record) => total + _toDouble(record['amount']),
+    );
+
+    final totalSales = saleRecords.fold<double>(
+      0,
+      (total, record) => total + _toDouble(record['totalAmount']),
+    );
+
+    final totalBirdsSold = saleRecords.fold<int>(
+      0,
+      (total, record) => total + _toInt(record['birdsSold']),
+    );
+
+    final totalWeightSold = saleRecords.fold<double>(
+      0,
+      (total, record) => total + _toDouble(record['totalWeight']),
+    );
+
+    final netResult = totalSales - totalExpenses;
+        final regularFont = await PdfGoogleFonts.cairoRegular();
+    final boldFont = await PdfGoogleFonts.cairoBold();
+
+    final pdf = pw.Document();
+
+    final netResultTitle = netResult >= 0 ? 'صافي ربح' : 'صافي خسارة';
+
+    final reportData = [
+      ['كود الدورة', cycleCode],
+      ['اسم الدورة', cycleName],
+      ['السلالة', breed],
+      ['الحالة', status],
+      ['تاريخ البداية', _formatDate(startDate)],
+      ['عمر الدورة بالأيام', daysFromStart.toString()],
+      ['عدد الكتاكيت في البداية', initialChicks.toString()],
+      ['إجمالي النفوق', totalMortality.toString()],
+      ['المتبقي الحالي', remainingChicks.toString()],
+      ['نسبة النفوق', '${_formatNumber(mortalityRate)} %'],
+      ['إجمالي العلف المستهلك', _formatNumber(totalFeed)],
+      ['آخر وزن متوسط', _formatNumber(latestAverageWeight)],
+      ['آخر متابعة', latestFollowupDate],
+      ['إجمالي المصروفات', _formatNumber(totalExpenses)],
+      ['إجمالي المبيعات', _formatNumber(totalSales)],
+      ['عدد الطيور المباعة', totalBirdsSold.toString()],
+      ['إجمالي الوزن المباع', '${_formatNumber(totalWeightSold)} كجم'],
+      [netResultTitle, _formatNumber(netResult.abs())],
+    ];
+        pdf.addPage(
+      pw.MultiPage(
+        pageFormat: PdfPageFormat.a4,
+        textDirection: pw.TextDirection.rtl,
+        theme: pw.ThemeData.withFont(
+          base: regularFont,
+          bold: boldFont,
+        ),
+        build: (context) {
+          return [
+            pw.Center(
+              child: pw.Text(
+                'تقرير ملخص دورة تسمين',
+                style: pw.TextStyle(
+                  fontSize: 22,
+                  fontWeight: pw.FontWeight.bold,
+                ),
+              ),
+            ),
+            pw.SizedBox(height: 12),
+            pw.Center(
+              child: pw.Text(
+                '$cycleCode - $cycleName',
+                style: pw.TextStyle(
+                  fontSize: 16,
+                  fontWeight: pw.FontWeight.bold,
+                ),
+              ),
+            ),
+            pw.SizedBox(height: 20),
+            pw.TableHelper.fromTextArray(
+              headers: ['البيان', 'القيمة'],
+              data: reportData,
+              border: pw.TableBorder.all(
+                color: PdfColors.grey600,
+              ),
+              headerDecoration: const pw.BoxDecoration(
+                color: PdfColors.grey300,
+              ),
+              headerStyle: pw.TextStyle(
+                fontWeight: pw.FontWeight.bold,
+              ),
+              cellAlignment: pw.Alignment.centerRight,
+              cellStyle: const pw.TextStyle(
+                fontSize: 11,
+              ),
+            ),
+            pw.SizedBox(height: 20),
+            pw.Text(
+              'ملاحظة: صافي الربح أو الخسارة = إجمالي المبيعات - إجمالي المصروفات المسجلة.',
+              style: const pw.TextStyle(
+                fontSize: 10,
+              ),
+            ),
+          ];
+        },
+      ),
+    );
+
+    await Printing.layoutPdf(
+      onLayout: (format) async => pdf.save(),
+    );
+  }
 
   bool _isSelectedCycleClosed() {
     return (_selectedCycle?['status'] ?? '').toString() == 'مغلقة';
@@ -513,8 +712,15 @@ class _CycleSummaryReportScreenState extends State<CycleSummaryReportScreen> {
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(
-        appBar: AppBar(
+                appBar: AppBar(
           title: const Text('تقرير ملخص الدورة'),
+          actions: [
+            IconButton(
+              tooltip: 'طباعة PDF',
+              icon: const Icon(Icons.picture_as_pdf),
+              onPressed: _printReport,
+            ),
+          ],
         ),
         body: _isLoading
             ? const Center(
