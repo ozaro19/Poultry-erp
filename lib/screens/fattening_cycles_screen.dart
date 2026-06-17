@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'daily_cycle_followup_screen.dart';
 import 'cycle_summary_report_screen.dart';
 import 'cycle_expenses_screen.dart';
+import 'cycle_sales_screen.dart';
 
 class FatteningCyclesScreen extends StatefulWidget {
   const FatteningCyclesScreen({super.key});
@@ -529,6 +530,18 @@ class _FatteningCyclesScreenState extends State<FatteningCyclesScreen> {
         appBar: AppBar(
           title: const Text('دورات التسمين'),
           actions: [
+            IconButton(
+              tooltip: 'مبيعات الدورة',
+              icon: const Icon(Icons.monetization_on),
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const CycleSalesScreen(),
+                  ),
+                );
+              },
+            ),
             IconButton(
               tooltip: 'مصروفات الدورة',
               icon: const Icon(Icons.receipt_long),
