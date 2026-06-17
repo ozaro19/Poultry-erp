@@ -131,18 +131,32 @@ class _CycleSummaryReportScreenState extends State<CycleSummaryReportScreen> {
     );
   }
 
-    Widget _buildSummarySection(QuerySnapshot snapshot) {
+      Widget _buildSummarySection(
+    QuerySnapshot followupSnapshot,
+    QuerySnapshot expensesSnapshot,
+  ) {
     if (_selectedCycle == null) {
       return const Center(
         child: Text('اختر دورة لعرض التقرير'),
       );
     }
 
-    final docs = snapshot.docs;
+    final docs = followupSnapshot.docs;
 
     final records = docs.map((doc) {
       return doc.data() as Map<String, dynamic>;
     }).toList();
+
+    final expenseDocs = expensesSnapshot.docs;
+
+    final expenseRecords = expenseDocs.map((doc) {
+      return doc.data() as Map<String, dynamic>;
+    }).toList();
+
+    final totalExpenses = expenseRecords.fold<double>(
+      0,
+      (total, record) => total + _toDouble(record['amount']),
+    );
 
     records.sort((a, b) {
       final dateA =
@@ -290,6 +304,33 @@ class _CycleSummaryReportScreenState extends State<CycleSummaryReportScreen> {
             ),
           ],
         ),
+        const SizedBox(height: 24),
+        const Text(
+          'مصروفات الدورة',
+          style: TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        const SizedBox(height: 10),
+        Wrap(
+          spacing: 12,
+          runSpacing: 12,
+          children: [
+            _buildInfoCard(
+              title: 'إجمالي المصروفات',
+              value: _formatNumber(totalExpenses),
+              icon: Icons.receipt_long,
+              color: Colors.indigo,
+            ),
+            _buildInfoCard(
+              title: 'عدد بنود المصروفات',
+              value: expenseRecords.length.toString(),
+              icon: Icons.list_alt,
+              color: Colors.blueGrey,
+            ),
+          ],
+        ),
         if (records.isEmpty) ...[
           const SizedBox(height: 20),
           const Text(
@@ -355,7 +396,7 @@ class _CycleSummaryReportScreenState extends State<CycleSummaryReportScreen> {
                           },
                         ),
                         const SizedBox(height: 16),
-                        Expanded(
+                         Expanded(
                           child: StreamBuilder<QuerySnapshot>(
                             stream: FirebaseFirestore.instance
                                 .collection('cycle_daily_followups')
@@ -364,23 +405,51 @@ class _CycleSummaryReportScreenState extends State<CycleSummaryReportScreen> {
                                   isEqualTo: _selectedCycleId,
                                 )
                                 .snapshots(),
-                            builder: (context, snapshot) {
-                              if (snapshot.hasError) {
+                            builder: (context, followupSnapshot) {
+                              if (followupSnapshot.hasError) {
                                 return const Center(
                                   child: Text(
-                                    'حدث خطأ أثناء تحميل تقرير الدورة',
+                                    'حدث خطأ أثناء تحميل متابعة الدورة',
                                   ),
                                 );
                               }
 
-                              if (!snapshot.hasData) {
+                              if (!followupSnapshot.hasData) {
                                 return const Center(
                                   child: CircularProgressIndicator(),
                                 );
                               }
 
-                              return SingleChildScrollView(
-                                child: _buildSummarySection(snapshot.data!),
+                              return StreamBuilder<QuerySnapshot>(
+                                stream: FirebaseFirestore.instance
+                                    .collection('cycle_expenses')
+                                    .where(
+                                      'cycleId',
+                                      isEqualTo: _selectedCycleId,
+                                    )
+                                    .snapshots(),
+                                builder: (context, expenseSnapshot) {
+                                  if (expenseSnapshot.hasError) {
+                                    return const Center(
+                                      child: Text(
+                                        'حدث خطأ أثناء تحميل مصروفات الدورة',
+                                      ),
+                                    );
+                                  }
+
+                                  if (!expenseSnapshot.hasData) {
+                                    return const Center(
+                                      child: CircularProgressIndicator(),
+                                    );
+                                  }
+
+                                  return SingleChildScrollView(
+                                    child: _buildSummarySection(
+                                      followupSnapshot.data!,
+                                      expenseSnapshot.data!,
+                                    ),
+                                  );
+                                },
                               );
                             },
                           ),
