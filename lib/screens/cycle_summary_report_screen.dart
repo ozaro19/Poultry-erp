@@ -134,6 +134,7 @@ class _CycleSummaryReportScreenState extends State<CycleSummaryReportScreen> {
       Widget _buildSummarySection(
     QuerySnapshot followupSnapshot,
     QuerySnapshot expensesSnapshot,
+    QuerySnapshot salesSnapshot,
   ) {
     if (_selectedCycle == null) {
       return const Center(
@@ -157,7 +158,28 @@ class _CycleSummaryReportScreenState extends State<CycleSummaryReportScreen> {
       0,
       (total, record) => total + _toDouble(record['amount']),
     );
+    final saleDocs = salesSnapshot.docs;
 
+    final saleRecords = saleDocs.map((doc) {
+      return doc.data() as Map<String, dynamic>;
+    }).toList();
+
+    final totalSales = saleRecords.fold<double>(
+      0,
+      (total, record) => total + _toDouble(record['totalAmount']),
+    );
+
+    final totalBirdsSold = saleRecords.fold<int>(
+      0,
+      (total, record) => total + _toInt(record['birdsSold']),
+    );
+
+    final totalWeightSold = saleRecords.fold<double>(
+      0,
+      (total, record) => total + _toDouble(record['totalWeight']),
+    );
+
+    final netResult = totalSales - totalExpenses;
     records.sort((a, b) {
       final dateA =
           (a['date'] as Timestamp?)?.toDate() ?? DateTime(1900);
@@ -331,6 +353,60 @@ class _CycleSummaryReportScreenState extends State<CycleSummaryReportScreen> {
             ),
           ],
         ),
+        const SizedBox(height: 24),
+        const Text(
+          'مبيعات الدورة',
+          style: TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        const SizedBox(height: 10),
+        Wrap(
+          spacing: 12,
+          runSpacing: 12,
+          children: [
+            _buildInfoCard(
+              title: 'إجمالي المبيعات',
+              value: _formatNumber(totalSales),
+              icon: Icons.monetization_on,
+              color: Colors.green,
+            ),
+            _buildInfoCard(
+              title: 'عدد الطيور المباعة',
+              value: totalBirdsSold.toString(),
+              icon: Icons.pets,
+              color: Colors.teal,
+            ),
+            _buildInfoCard(
+              title: 'إجمالي الوزن المباع',
+              value: '${_formatNumber(totalWeightSold)} كجم',
+              icon: Icons.monitor_weight,
+              color: Colors.purple,
+            ),
+          ],
+        ),
+        const SizedBox(height: 24),
+        const Text(
+          'نتيجة الدورة',
+          style: TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        const SizedBox(height: 10),
+        Wrap(
+          spacing: 12,
+          runSpacing: 12,
+          children: [
+            _buildInfoCard(
+              title: netResult >= 0 ? 'صافي ربح' : 'صافي خسارة',
+              value: _formatNumber(netResult.abs()),
+              icon: netResult >= 0 ? Icons.trending_up : Icons.trending_down,
+              color: netResult >= 0 ? Colors.green : Colors.red,
+            ),
+          ],
+        ),
         if (records.isEmpty) ...[
           const SizedBox(height: 20),
           const Text(
@@ -396,7 +472,7 @@ class _CycleSummaryReportScreenState extends State<CycleSummaryReportScreen> {
                           },
                         ),
                         const SizedBox(height: 16),
-                         Expanded(
+                        Expanded(
                           child: StreamBuilder<QuerySnapshot>(
                             stream: FirebaseFirestore.instance
                                 .collection('cycle_daily_followups')
@@ -443,11 +519,37 @@ class _CycleSummaryReportScreenState extends State<CycleSummaryReportScreen> {
                                     );
                                   }
 
-                                  return SingleChildScrollView(
-                                    child: _buildSummarySection(
-                                      followupSnapshot.data!,
-                                      expenseSnapshot.data!,
-                                    ),
+                                  return StreamBuilder<QuerySnapshot>(
+                                    stream: FirebaseFirestore.instance
+                                        .collection('cycle_sales')
+                                        .where(
+                                          'cycleId',
+                                          isEqualTo: _selectedCycleId,
+                                        )
+                                        .snapshots(),
+                                    builder: (context, salesSnapshot) {
+                                      if (salesSnapshot.hasError) {
+                                        return const Center(
+                                          child: Text(
+                                            'حدث خطأ أثناء تحميل مبيعات الدورة',
+                                          ),
+                                        );
+                                      }
+
+                                      if (!salesSnapshot.hasData) {
+                                        return const Center(
+                                          child: CircularProgressIndicator(),
+                                        );
+                                      }
+
+                                      return SingleChildScrollView(
+                                        child: _buildSummarySection(
+                                          followupSnapshot.data!,
+                                          expenseSnapshot.data!,
+                                          salesSnapshot.data!,
+                                        ),
+                                      );
+                                    },
                                   );
                                 },
                               );
