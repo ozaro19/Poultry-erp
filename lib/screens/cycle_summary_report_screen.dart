@@ -421,6 +421,93 @@ class _CycleSummaryReportScreenState extends State<CycleSummaryReportScreen> {
     );
   }
 
+  bool _isSelectedCycleClosed() {
+    return (_selectedCycle?['status'] ?? '').toString() == 'مغلقة';
+  }
+
+  Future<void> _closeSelectedCycle(BuildContext context) async {
+    if (_selectedCycleId == null || _selectedCycle == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('يجب اختيار دورة أولًا'),
+        ),
+      );
+      return;
+    }
+
+    if (_isSelectedCycleClosed()) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('هذه الدورة مغلقة بالفعل'),
+        ),
+      );
+      return;
+    }
+
+    final cycleCode = (_selectedCycle!['code'] ?? '').toString();
+    final cycleName = (_selectedCycle!['name'] ?? '').toString();
+
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('تأكيد إغلاق الدورة'),
+          content: Text(
+            'هل تريد إغلاق الدورة $cycleCode - $cycleName ؟',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('إلغاء'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('إغلاق الدورة'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (result != true) return;
+
+    final closedAt = Timestamp.now();
+
+    await FirebaseFirestore.instance
+        .collection('fattening_cycles')
+        .doc(_selectedCycleId)
+        .update({
+      'status': 'مغلقة',
+      'closedAt': closedAt,
+      'updatedAt': closedAt,
+    });
+
+    if (!context.mounted) return;
+
+    setState(() {
+      final index = _cycles.indexWhere(
+        (cycle) => cycle['id'].toString() == _selectedCycleId,
+      );
+
+      if (index != -1) {
+        _cycles[index]['status'] = 'مغلقة';
+        _cycles[index]['closedAt'] = closedAt;
+        _cycles[index]['updatedAt'] = closedAt;
+        _selectedCycle = _cycles[index];
+      } else {
+        _selectedCycle!['status'] = 'مغلقة';
+        _selectedCycle!['closedAt'] = closedAt;
+        _selectedCycle!['updatedAt'] = closedAt;
+      }
+    });
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('تم إغلاق الدورة بنجاح'),
+      ),
+    );
+  }
+
     @override
   Widget build(BuildContext context) {
     return Directionality(
@@ -470,6 +557,25 @@ class _CycleSummaryReportScreenState extends State<CycleSummaryReportScreen> {
                               _selectedCycle = selectedCycle;
                             });
                           },
+                        ),
+                        const SizedBox(height: 8),
+                        Align(
+                          alignment: Alignment.centerRight,
+                          child: ElevatedButton.icon(
+                            onPressed: _isSelectedCycleClosed()
+                                ? null
+                                : () => _closeSelectedCycle(context),
+                            icon: Icon(
+                              _isSelectedCycleClosed()
+                                  ? Icons.lock
+                                  : Icons.lock_open,
+                            ),
+                            label: Text(
+                              _isSelectedCycleClosed()
+                                  ? 'الدورة مغلقة'
+                                  : 'إغلاق الدورة',
+                            ),
+                          ),
                         ),
                         const SizedBox(height: 16),
                         Expanded(
