@@ -556,6 +556,76 @@ class _CycleSummaryReportScreenState extends State<CycleSummaryReportScreen> {
       ['إجمالي الوزن المباع', '${_formatNumber(totalWeightSold)} كجم'],
       [netResultTitle, _formatNumber(netResult.abs())],
     ];
+    final followupDetails = followupRecords.map<List<String>>((record) {
+      return [
+        _formatDate(record['date'] as Timestamp?),
+        _toInt(record['mortality']).toString(),
+        _formatNumber(_toDouble(record['feedQty'])),
+        _formatNumber(_toDouble(record['averageWeight'])),
+        (record['notes'] ?? '').toString(),
+      ];
+    }).toList();
+
+    final expenseDetails = expenseRecords.map<List<String>>((record) {
+      return [
+        _formatDate(record['date'] as Timestamp?),
+        (record['category'] ?? '').toString(),
+        _formatNumber(_toDouble(record['amount'])),
+        (record['notes'] ?? '').toString(),
+      ];
+    }).toList();
+
+    final salesDetails = saleRecords.map<List<String>>((record) {
+      return [
+        _formatDate(record['date'] as Timestamp?),
+        _toInt(record['birdsSold']).toString(),
+        _formatNumber(_toDouble(record['totalWeight'])),
+        _formatNumber(_toDouble(record['pricePerKg'])),
+        _formatNumber(_toDouble(record['totalAmount'])),
+        (record['notes'] ?? '').toString(),
+      ];
+    }).toList();
+    pw.Widget buildDetailTable({
+      required String title,
+      required List<String> headers,
+      required List<List<String>> data,
+    }) {
+      if (data.isEmpty) {
+        return pw.SizedBox();
+      }
+
+      return pw.Column(
+        crossAxisAlignment: pw.CrossAxisAlignment.start,
+        children: [
+          pw.SizedBox(height: 18),
+          pw.Text(
+            title,
+            style: pw.TextStyle(
+              fontSize: 15,
+              fontWeight: pw.FontWeight.bold,
+            ),
+          ),
+          pw.SizedBox(height: 8),
+          pw.TableHelper.fromTextArray(
+            headers: headers,
+            data: data,
+            border: pw.TableBorder.all(
+              color: PdfColors.grey600,
+            ),
+            headerDecoration: const pw.BoxDecoration(
+              color: PdfColors.grey300,
+            ),
+            headerStyle: pw.TextStyle(
+              fontWeight: pw.FontWeight.bold,
+            ),
+            cellAlignment: pw.Alignment.centerRight,
+            cellStyle: const pw.TextStyle(
+              fontSize: 9,
+            ),
+          ),
+        ],
+      );
+    }
         pdf.addPage(
       pw.MultiPage(
         pageFormat: PdfPageFormat.a4,
@@ -602,6 +672,39 @@ class _CycleSummaryReportScreenState extends State<CycleSummaryReportScreen> {
               cellStyle: const pw.TextStyle(
                 fontSize: 11,
               ),
+            ),
+            buildDetailTable(
+              title: 'تفاصيل المتابعة اليومية',
+              headers: [
+                'التاريخ',
+                'النفوق',
+                'العلف',
+                'الوزن',
+                'ملاحظات',
+              ],
+              data: followupDetails,
+            ),
+            buildDetailTable(
+              title: 'تفاصيل المصروفات',
+              headers: [
+                'التاريخ',
+                'النوع',
+                'المبلغ',
+                'ملاحظات',
+              ],
+              data: expenseDetails,
+            ),
+            buildDetailTable(
+              title: 'تفاصيل المبيعات',
+              headers: [
+                'التاريخ',
+                'العدد',
+                'الوزن',
+                'سعر الكيلو',
+                'الإجمالي',
+                'ملاحظات',
+              ],
+              data: salesDetails,
             ),
             pw.SizedBox(height: 20),
             pw.Text(
