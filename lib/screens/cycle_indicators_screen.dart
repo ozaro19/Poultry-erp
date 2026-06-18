@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
+import 'package:flutter/services.dart';
 
 class CycleIndicatorsScreen extends StatefulWidget {
   const CycleIndicatorsScreen({super.key});
@@ -150,6 +151,13 @@ class _CycleIndicatorsScreenState extends State<CycleIndicatorsScreen> {
 
     final regularFont = await PdfGoogleFonts.cairoRegular();
     final boldFont = await PdfGoogleFonts.cairoBold();
+    final logoData = await rootBundle.load(
+      'assets/images/poultry_logo.png',
+    );
+
+    final logoImage = pw.MemoryImage(
+      logoData.buffer.asUint8List(),
+    );
 
     final cycleResults =
         data['cycleResults'] as List<Map<String, dynamic>>;
@@ -218,6 +226,35 @@ class _CycleIndicatorsScreenState extends State<CycleIndicatorsScreen> {
               child: pw.Column(
                 crossAxisAlignment: pw.CrossAxisAlignment.start,
                 children: [
+                  pw.Center(
+                    child: pw.Image(
+                      logoImage,
+                      width: 65,
+                      height: 65,
+                    ),
+                  ),
+                  pw.SizedBox(height: 6),
+                  pw.Center(
+                    child: pw.Text(
+                      'Poultry ERP',
+                      style: pw.TextStyle(
+                        fontSize: 14,
+                        fontWeight: pw.FontWeight.bold,
+                        color: PdfColors.grey800,
+                      ),
+                    ),
+                  ),
+                  pw.SizedBox(height: 4),
+                  pw.Center(
+                    child: pw.Text(
+                      'اسم الشركة: المزرعة السعيدة',
+                      style: const pw.TextStyle(
+                        fontSize: 10,
+                        color: PdfColors.grey700,
+                      ),
+                    ),
+                  ),
+                  pw.SizedBox(height: 8),
                   pw.Center(
                     child: pw.Text(
                       'لوحة مؤشرات دورات التسمين',
