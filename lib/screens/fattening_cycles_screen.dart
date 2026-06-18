@@ -4,6 +4,7 @@ import 'daily_cycle_followup_screen.dart';
 import 'cycle_summary_report_screen.dart';
 import 'cycle_expenses_screen.dart';
 import 'cycle_sales_screen.dart';
+import 'cycle_indicators_screen.dart';
 
 class FatteningCyclesScreen extends StatefulWidget {
   const FatteningCyclesScreen({super.key});
@@ -161,6 +162,18 @@ class _FatteningCyclesScreenState extends State<FatteningCyclesScreen> {
                 ),
               ),
               actions: [
+                IconButton(
+                  tooltip: 'لوحة المؤشرات',
+                  icon: const Icon(Icons.insights),
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const CycleIndicatorsScreen(),
+                      ),
+                    );
+                  },
+                ),
                 TextButton(
                   onPressed: () => Navigator.pop(context),
                   child: const Text('إلغاء'),
