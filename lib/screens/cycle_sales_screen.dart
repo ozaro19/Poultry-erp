@@ -55,6 +55,45 @@ class _CycleSalesScreenState extends State<CycleSalesScreen> {
     return cycles;
   }
 
+  Future<List<Map<String, dynamic>>> _loadAccounts() async {
+    final snapshot = await FirebaseFirestore.instance
+        .collection('chart_of_accounts')
+        .orderBy('code')
+        .get();
+
+    return snapshot.docs.map((doc) {
+      final data = doc.data();
+
+      return {
+        'id': doc.id,
+        ...data,
+      };
+    }).toList();
+  }
+
+  Future<String> _generateEntryNo() async {
+    final counterRef = FirebaseFirestore.instance
+        .collection('counters')
+        .doc('journal_entries');
+
+    final counterSnapshot = await counterRef.get();
+
+    int lastNumber = 0;
+
+    if (counterSnapshot.exists) {
+      final counterData = counterSnapshot.data();
+      lastNumber = counterData?['lastNumber'] ?? 0;
+    }
+
+    final nextNumber = lastNumber + 1;
+
+    await counterRef.set({
+      'lastNumber': nextNumber,
+    }, SetOptions(merge: true));
+
+    return 'JE-${nextNumber.toString().padLeft(4, '0')}';
+  }
+
     Future<void> _addSale(BuildContext context) async {
     final birdsSoldController = TextEditingController();
     final totalWeightController = TextEditingController();
@@ -67,7 +106,14 @@ class _CycleSalesScreenState extends State<CycleSalesScreen> {
     String selectedCycleCode = '';
     String selectedCycleName = '';
 
+    String? selectedCashAccountCode;
+    String selectedCashAccountName = '';
+
+    String? selectedSalesAccountCode;
+    String selectedSalesAccountName = '';
+
     final cycles = await _loadCycles();
+    final accounts = await _loadAccounts();
 
     if (!context.mounted) return;
 
@@ -75,6 +121,15 @@ class _CycleSalesScreenState extends State<CycleSalesScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('لا توجد دورات تسمين لإضافة مبيعات'),
+        ),
+      );
+      return;
+    }
+
+    if (accounts.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('لا توجد حسابات. أضف شجرة الحسابات أولًا'),
         ),
       );
       return;
@@ -155,6 +210,84 @@ class _CycleSalesScreenState extends State<CycleSalesScreen> {
                         ],
                       ),
                       const SizedBox(height: 12),
+                      DropdownButtonFormField<String>(
+                        initialValue: selectedCashAccountCode,
+                        decoration: const InputDecoration(
+                          labelText: 'حساب الخزينة',
+                          border: OutlineInputBorder(),
+                        ),
+                        items: accounts.map((account) {
+                          final code = (account['code'] ?? '').toString();
+
+                          final name = (account['nameAr'] ??
+                                  account['name'] ??
+                                  account['nameEn'] ??
+                                  '')
+                              .toString();
+
+                          return DropdownMenuItem(
+                            value: code,
+                            child: Text('$code - $name'),
+                          );
+                        }).toList(),
+                        onChanged: (value) {
+                          if (value == null) return;
+
+                          final selectedAccount = accounts.firstWhere(
+                            (account) => account['code'].toString() == value,
+                          );
+
+                          setState(() {
+                            selectedCashAccountCode = value;
+                            selectedCashAccountName =
+                                (selectedAccount['nameAr'] ??
+                                        selectedAccount['name'] ??
+                                        selectedAccount['nameEn'] ??
+                                        '')
+                                    .toString();
+                          });
+                        },
+                      ),
+                      const SizedBox(height: 12),
+                      DropdownButtonFormField<String>(
+                        initialValue: selectedSalesAccountCode,
+                        decoration: const InputDecoration(
+                          labelText: 'حساب المبيعات',
+                          border: OutlineInputBorder(),
+                        ),
+                        items: accounts.map((account) {
+                          final code = (account['code'] ?? '').toString();
+
+                          final name = (account['nameAr'] ??
+                                  account['name'] ??
+                                  account['nameEn'] ??
+                                  '')
+                              .toString();
+
+                          return DropdownMenuItem(
+                            value: code,
+                            child: Text('$code - $name'),
+                          );
+                        }).toList(),
+                        onChanged: (value) {
+                          if (value == null) return;
+
+                          final selectedAccount = accounts.firstWhere(
+                            (account) => account['code'].toString() == value,
+                          );
+
+                          setState(() {
+                            selectedSalesAccountCode = value;
+                            selectedSalesAccountName =
+                                (selectedAccount['nameAr'] ??
+                                        selectedAccount['name'] ??
+                                        selectedAccount['nameEn'] ??
+                                        '')
+                                    .toString();
+                          });
+                        },
+                      ),
+                      const SizedBox(height: 12),                      
                       TextField(
                         controller: birdsSoldController,
                         decoration: const InputDecoration(
@@ -262,8 +395,29 @@ class _CycleSalesScreenState extends State<CycleSalesScreen> {
                       );
                       return;
                     }
+                    if (selectedCashAccountCode == null ||
+                        selectedCashAccountCode!.isEmpty) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('يجب اختيار حساب الخزينة'),
+                        ),
+                      );
+                      return;
+                    }
 
-                    await FirebaseFirestore.instance
+                    if (selectedSalesAccountCode == null ||
+                        selectedSalesAccountCode!.isEmpty) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('يجب اختيار حساب المبيعات'),
+                        ),
+                      );
+                      return;
+                    }
+
+                    final cashAccountCode = selectedCashAccountCode!;
+                    final salesAccountCode = selectedSalesAccountCode!;
+                    final saleRef = await FirebaseFirestore.instance
                         .collection('cycle_sales')
                         .add({
                       'cycleId': selectedCycleId,
@@ -275,8 +429,48 @@ class _CycleSalesScreenState extends State<CycleSalesScreen> {
                       'totalWeight': totalWeight,
                       'pricePerKg': pricePerKg,
                       'totalAmount': totalAmount,
+                      'cashAccountCode': cashAccountCode,
+                      'cashAccountName': selectedCashAccountName,
+                      'salesAccountCode': salesAccountCode,
+                      'salesAccountName': selectedSalesAccountName,
+                      'journalEntryId': '',
                       'notes': notes,
                       'createdAt': Timestamp.now(),
+                    });
+
+                    final entryNo = await _generateEntryNo();
+
+                    final journalEntryRef = await FirebaseFirestore.instance
+                        .collection('journal_entries')
+                        .add({
+                      'entryNo': entryNo,
+                      'date': Timestamp.fromDate(selectedDate),
+                      'description':
+                          'مبيعات دورة $selectedCycleCode - $selectedCycleName',
+                      'lines': [
+                        {
+                          'accountCode': cashAccountCode,
+                          'accountName': selectedCashAccountName,
+                          'debit': totalAmount,
+                          'credit': 0,
+                        },
+                        {
+                          'accountCode': salesAccountCode,
+                          'accountName': selectedSalesAccountName,
+                          'debit': 0,
+                          'credit': totalAmount,
+                        },
+                      ],
+                      'totalDebit': totalAmount,
+                      'totalCredit': totalAmount,
+                      'source': 'cycle_sale',
+                      'sourceId': saleRef.id,
+                      'cycleId': selectedCycleId,
+                      'createdAt': Timestamp.now(),
+                    });
+
+                    await saleRef.update({
+                      'journalEntryId': journalEntryRef.id,
                     });
 
                     if (context.mounted) {
@@ -319,6 +513,21 @@ class _CycleSalesScreenState extends State<CycleSalesScreen> {
 
     final cycleCode = (data['cycleCode'] ?? '').toString();
     final cycleName = (data['cycleName'] ?? '').toString();
+
+    final journalEntryId =
+        (data['journalEntryId'] ?? '').toString();
+
+    final cashAccountCode =
+        (data['cashAccountCode'] ?? '').toString();
+
+    final cashAccountName =
+        (data['cashAccountName'] ?? '').toString();
+
+    final salesAccountCode =
+        (data['salesAccountCode'] ?? '').toString();
+
+    final salesAccountName =
+        (data['salesAccountName'] ?? '').toString();
 
     await showDialog(
       context: context,
@@ -482,6 +691,36 @@ class _CycleSalesScreenState extends State<CycleSalesScreen> {
                       'updatedAt': Timestamp.now(),
                     });
 
+                    if (journalEntryId.isNotEmpty &&
+                        cashAccountCode.isNotEmpty &&
+                        salesAccountCode.isNotEmpty) {
+                      await FirebaseFirestore.instance
+                          .collection('journal_entries')
+                          .doc(journalEntryId)
+                          .update({
+                        'date': Timestamp.fromDate(selectedDate),
+                        'description':
+                            'مبيعات دورة $cycleCode - $cycleName',
+                        'lines': [
+                          {
+                            'accountCode': cashAccountCode,
+                            'accountName': cashAccountName,
+                            'debit': totalAmount,
+                            'credit': 0,
+                          },
+                          {
+                            'accountCode': salesAccountCode,
+                            'accountName': salesAccountName,
+                            'debit': 0,
+                            'credit': totalAmount,
+                          },
+                        ],
+                        'totalDebit': totalAmount,
+                        'totalCredit': totalAmount,
+                        'updatedAt': Timestamp.now(),
+                      });
+                    }
+
                     if (context.mounted) {
                       Navigator.pop(context);
                     }
@@ -501,6 +740,7 @@ class _CycleSalesScreenState extends State<CycleSalesScreen> {
     String documentId,
     String cycleName,
     String date,
+    Map<String, dynamic> data,
   ) async {
     final result = await showDialog<bool>(
       context: context,
@@ -525,6 +765,16 @@ class _CycleSalesScreenState extends State<CycleSalesScreen> {
     );
 
     if (result == true) {
+      final journalEntryId =
+          (data['journalEntryId'] ?? '').toString();
+
+      if (journalEntryId.isNotEmpty) {
+        await FirebaseFirestore.instance
+            .collection('journal_entries')
+            .doc(journalEntryId)
+            .delete();
+      }
+
       await FirebaseFirestore.instance
           .collection('cycle_sales')
           .doc(documentId)
@@ -641,6 +891,7 @@ class _CycleSalesScreenState extends State<CycleSalesScreen> {
                               documentId,
                               cycleName,
                               _formatDate(date),
+                              data,
                             );
                           },
                         ),
