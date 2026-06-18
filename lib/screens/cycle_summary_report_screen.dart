@@ -594,6 +594,12 @@ class _CycleSummaryReportScreenState extends State<CycleSummaryReportScreen> {
         return pw.SizedBox();
       }
 
+      final reversedHeaders = headers.reversed.toList();
+
+      final reversedData = data.map((row) {
+        return row.reversed.toList();
+      }).toList();
+
       return pw.Column(
         crossAxisAlignment: pw.CrossAxisAlignment.start,
         children: [
@@ -607,8 +613,8 @@ class _CycleSummaryReportScreenState extends State<CycleSummaryReportScreen> {
           ),
           pw.SizedBox(height: 8),
           pw.TableHelper.fromTextArray(
-            headers: headers,
-            data: data,
+            headers: reversedHeaders,
+            data: reversedData,
             border: pw.TableBorder.all(
               color: PdfColors.grey600,
             ),
@@ -657,8 +663,8 @@ class _CycleSummaryReportScreenState extends State<CycleSummaryReportScreen> {
             ),
             pw.SizedBox(height: 20),
             pw.TableHelper.fromTextArray(
-              headers: ['البيان', 'القيمة'],
-              data: reportData,
+              headers: ['القيمة', 'البيان'],
+              data: reportData.map((row) => row.reversed.toList()).toList(),
               border: pw.TableBorder.all(
                 color: PdfColors.grey600,
               ),
