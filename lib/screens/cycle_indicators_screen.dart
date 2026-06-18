@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:printing/printing.dart';
 
 class CycleIndicatorsScreen extends StatefulWidget {
   const CycleIndicatorsScreen({super.key});
@@ -102,6 +105,265 @@ class _CycleIndicatorsScreenState extends State<CycleIndicatorsScreen> {
         _toDate = pickedDate;
       }
     });
+  }
+  String _selectedCycleLabel(
+    List<Map<String, dynamic>> cyclesForFilter,
+  ) {
+    if (_selectedCycleId == 'all') {
+      return 'كل الدورات';
+    }
+
+    final selectedCycles = cyclesForFilter.where((cycle) {
+      return cycle['id'].toString() == _selectedCycleId;
+    }).toList();
+
+    if (selectedCycles.isEmpty) {
+      return 'دورة محددة';
+    }
+
+    final cycle = selectedCycles.first;
+
+    return '${cycle['code']} - ${cycle['name']}';
+  }
+
+  String _dateRangeLabel() {
+    return 'من: ${_formatDate(_fromDate)}  -  إلى: ${_formatDate(_toDate)}';
+  }
+  pw.Widget _buildPdfCell(
+    String text, {
+    bool isHeader = false,
+  }) {
+    return pw.Padding(
+      padding: const pw.EdgeInsets.all(6),
+      child: pw.Text(
+        text,
+        style: pw.TextStyle(
+          fontSize: isHeader ? 11 : 10,
+          fontWeight: isHeader ? pw.FontWeight.bold : pw.FontWeight.normal,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _printIndicatorsPdf() async {
+    final data = await _loadIndicators();
+
+    final regularFont = await PdfGoogleFonts.cairoRegular();
+    final boldFont = await PdfGoogleFonts.cairoBold();
+
+    final cycleResults =
+        data['cycleResults'] as List<Map<String, dynamic>>;
+
+    final cyclesForFilter =
+        data['cyclesForFilter'] as List<Map<String, dynamic>>;
+
+    final netResult = data['netResult'] as num;
+    final lowStockCount = data['lowStockCount'] as int;
+
+    final selectedCycle = _selectedCycleLabel(cyclesForFilter);
+    final dateRange = _dateRangeLabel();
+
+    final metrics = <Map<String, String>>[
+      {
+        'title': 'إجمالي الدورات',
+        'value': data['totalCycles'].toString(),
+      },
+      {
+        'title': 'الدورات النشطة',
+        'value': data['activeCycles'].toString(),
+      },
+      {
+        'title': 'الدورات المغلقة',
+        'value': data['closedCycles'].toString(),
+      },
+      {
+        'title': 'إجمالي المبيعات',
+        'value': _formatNumber(data['totalSales'] as num),
+      },
+      {
+        'title': 'إجمالي المصروفات',
+        'value': _formatNumber(data['totalExpenses'] as num),
+      },
+      {
+        'title': 'إجمالي الأرباح',
+        'value': _formatNumber(data['totalProfit'] as num),
+      },
+      {
+        'title': 'إجمالي الخسائر',
+        'value': _formatNumber(data['totalLoss'] as num),
+      },
+      {
+        'title': 'صافي النتيجة',
+        'value': _formatNumber(netResult),
+      },
+      {
+        'title': 'أصناف مخزون منخفضة',
+        'value': lowStockCount.toString(),
+      },
+    ];
+    final pdf = pw.Document();
+
+    pdf.addPage(
+      pw.MultiPage(
+        pageFormat: PdfPageFormat.a4,
+        margin: const pw.EdgeInsets.all(24),
+        theme: pw.ThemeData.withFont(
+          base: regularFont,
+          bold: boldFont,
+        ),
+        build: (context) {
+          return [
+            pw.Directionality(
+              textDirection: pw.TextDirection.rtl,
+              child: pw.Column(
+                crossAxisAlignment: pw.CrossAxisAlignment.start,
+                children: [
+                  pw.Center(
+                    child: pw.Text(
+                      'لوحة مؤشرات دورات التسمين',
+                      style: pw.TextStyle(
+                        fontSize: 18,
+                        fontWeight: pw.FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                  pw.SizedBox(height: 12),
+                  pw.Text(
+                    'نطاق الدورة: $selectedCycle',
+                    style: pw.TextStyle(
+                      fontSize: 11,
+                      fontWeight: pw.FontWeight.bold,
+                    ),
+                  ),
+                  pw.Text(
+                    'نطاق التاريخ: $dateRange',
+                    style: const pw.TextStyle(
+                      fontSize: 11,
+                    ),
+                  ),
+                  pw.Text(
+                    'تاريخ الطباعة: ${_formatDate(DateTime.now())}',
+                    style: const pw.TextStyle(
+                      fontSize: 10,
+                    ),
+                  ),
+                  pw.SizedBox(height: 16),
+                  pw.Text(
+                    'المؤشرات العامة',
+                    style: pw.TextStyle(
+                      fontSize: 14,
+                      fontWeight: pw.FontWeight.bold,
+                    ),
+                  ),
+                  pw.SizedBox(height: 8),
+                  pw.Table(
+                    border: pw.TableBorder.all(
+                      color: PdfColors.grey400,
+                    ),
+                    columnWidths: const {
+                      0: pw.FlexColumnWidth(1),
+                      1: pw.FlexColumnWidth(2),
+                    },
+                    children: metrics.map((metric) {
+                      return pw.TableRow(
+                        children: [
+                          _buildPdfCell(
+                            metric['value']!,
+                          ),
+                          _buildPdfCell(
+                            metric['title']!,
+                            isHeader: true,
+                          ),
+                        ],
+                      );
+                    }).toList(),
+                  ),
+                  pw.SizedBox(height: 18),
+                  pw.Text(
+                    'نتائج الدورات',
+                    style: pw.TextStyle(
+                      fontSize: 14,
+                      fontWeight: pw.FontWeight.bold,
+                    ),
+                  ),
+                  pw.SizedBox(height: 8),
+                  if (cycleResults.isEmpty)
+                    pw.Text(
+                      'لا توجد دورات في نطاق العرض المحدد',
+                      style: const pw.TextStyle(
+                        fontSize: 11,
+                      ),
+                    )
+                  else
+                    pw.Table(
+                      border: pw.TableBorder.all(
+                        color: PdfColors.grey400,
+                      ),
+                      children: [
+                        pw.TableRow(
+                          decoration: const pw.BoxDecoration(
+                            color: PdfColors.grey300,
+                          ),
+                          children: [
+                            _buildPdfCell(
+                              'الصافي',
+                              isHeader: true,
+                            ),
+                            _buildPdfCell(
+                              'المصروفات',
+                              isHeader: true,
+                            ),
+                            _buildPdfCell(
+                              'المبيعات',
+                              isHeader: true,
+                            ),
+                            _buildPdfCell(
+                              'الحالة',
+                              isHeader: true,
+                            ),
+                            _buildPdfCell(
+                              'الدورة',
+                              isHeader: true,
+                            ),
+                          ],
+                        ),
+                        ...cycleResults.map((cycle) {
+                          final cycleNetResult =
+                              _toDouble(cycle['netResult']);
+
+                          return pw.TableRow(
+                            children: [
+                              _buildPdfCell(
+                                _formatNumber(cycleNetResult),
+                              ),
+                              _buildPdfCell(
+                                _formatNumber(cycle['expenses'] as num),
+                              ),
+                              _buildPdfCell(
+                                _formatNumber(cycle['sales'] as num),
+                              ),
+                              _buildPdfCell(
+                                cycle['status'].toString(),
+                              ),
+                              _buildPdfCell(
+                                '${cycle['code']} - ${cycle['name']}',
+                              ),
+                            ],
+                          );
+                        }),
+                      ],
+                    ),
+                ],
+              ),
+            ),
+          ];
+        },
+      ),
+    );
+
+    await Printing.layoutPdf(
+      onLayout: (format) async => pdf.save(),
+    );
   }
     Future<Map<String, dynamic>> _loadIndicators() async {
     final cyclesSnapshot = await FirebaseFirestore.instance
@@ -364,6 +626,15 @@ class _CycleIndicatorsScreenState extends State<CycleIndicatorsScreen> {
       child: Scaffold(
         appBar: AppBar(
           title: const Text('لوحة مؤشرات دورات التسمين'),
+          actions: [
+            IconButton(
+              tooltip: 'طباعة PDF',
+              icon: const Icon(Icons.picture_as_pdf),
+              onPressed: () {
+                _printIndicatorsPdf();
+              },
+            ),
+          ],
         ),
         body: FutureBuilder<Map<String, dynamic>>(
           future: _loadIndicators(),
