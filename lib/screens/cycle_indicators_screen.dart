@@ -10,6 +10,8 @@ class CycleIndicatorsScreen extends StatefulWidget {
 }
 
 class _CycleIndicatorsScreenState extends State<CycleIndicatorsScreen> {
+  String _selectedCycleId = 'all';
+
   double _toDouble(dynamic value) {
     if (value is int) return value.toDouble();
     if (value is double) return value;
@@ -71,20 +73,50 @@ class _CycleIndicatorsScreenState extends State<CycleIndicatorsScreen> {
       return doc.data();
     }).toList();
 
-    final activeCycles = cycles.where((cycle) {
+    final cyclesForFilter = cycles.map((cycle) {
+      return {
+        'id': cycle['id'].toString(),
+        'code': (cycle['code'] ?? '').toString(),
+        'name': (cycle['name'] ?? '').toString(),
+      };
+    }).toList();
+
+    final filteredCycles = _selectedCycleId == 'all'
+        ? cycles
+        : cycles.where((cycle) {
+            return cycle['id'].toString() == _selectedCycleId;
+          }).toList();
+
+    final filteredCycleIds = filteredCycles.map((cycle) {
+      return cycle['id'].toString();
+    }).toSet();
+
+    final filteredSales = sales.where((record) {
+      final cycleId = (record['cycleId'] ?? '').toString();
+
+      return filteredCycleIds.contains(cycleId);
+    }).toList();
+
+    final filteredExpenses = expenses.where((record) {
+      final cycleId = (record['cycleId'] ?? '').toString();
+
+      return filteredCycleIds.contains(cycleId);
+    }).toList();
+
+    final activeCycles = filteredCycles.where((cycle) {
       return (cycle['status'] ?? '').toString() == 'نشطة';
     }).length;
 
-    final closedCycles = cycles.where((cycle) {
+    final closedCycles = filteredCycles.where((cycle) {
       return (cycle['status'] ?? '').toString() == 'مغلقة';
     }).length;
 
-    final totalSales = sales.fold<double>(
+    final totalSales = filteredSales.fold<double>(
       0,
       (total, record) => total + _toDouble(record['totalAmount']),
     );
 
-    final totalExpenses = expenses.fold<double>(
+    final totalExpenses = filteredExpenses.fold<double>(
       0,
       (total, record) => total + _toDouble(record['amount']),
     );
@@ -94,17 +126,17 @@ class _CycleIndicatorsScreenState extends State<CycleIndicatorsScreen> {
 
     final cycleResults = <Map<String, dynamic>>[];
 
-    for (final cycle in cycles) {
+    for (final cycle in filteredCycles) {
       final cycleId = cycle['id'].toString();
 
-      final cycleSales = sales.where((record) {
+      final cycleSales = filteredSales.where((record) {
         return (record['cycleId'] ?? '').toString() == cycleId;
       }).fold<double>(
         0,
         (total, record) => total + _toDouble(record['totalAmount']),
       );
 
-      final cycleExpenses = expenses.where((record) {
+      final cycleExpenses = filteredExpenses.where((record) {
         return (record['cycleId'] ?? '').toString() == cycleId;
       }).fold<double>(
         0,
@@ -144,7 +176,6 @@ class _CycleIndicatorsScreenState extends State<CycleIndicatorsScreen> {
       }
 
       final type = (transaction['type'] ?? '').toString();
-
       final quantity = _toDouble(transaction['quantity']);
 
       transactionTotals.putIfAbsent(
@@ -178,8 +209,8 @@ class _CycleIndicatorsScreenState extends State<CycleIndicatorsScreen> {
 
       final totals = transactionTotals[itemCode];
 
-      final totalAdd = totals == null ? 0 : totals['add'] ?? 0;
-      final totalIssue = totals == null ? 0 : totals['issue'] ?? 0;
+      final totalAdd = totals == null ? 0.0 : totals['add'] ?? 0.0;
+      final totalIssue = totals == null ? 0.0 : totals['issue'] ?? 0.0;
 
       final currentBalance = openingQty + totalAdd - totalIssue;
 
@@ -191,7 +222,7 @@ class _CycleIndicatorsScreenState extends State<CycleIndicatorsScreen> {
     final netResult = totalSales - totalExpenses;
 
     return {
-      'totalCycles': cycles.length,
+      'totalCycles': filteredCycles.length,
       'activeCycles': activeCycles,
       'closedCycles': closedCycles,
       'totalSales': totalSales,
@@ -201,9 +232,11 @@ class _CycleIndicatorsScreenState extends State<CycleIndicatorsScreen> {
       'netResult': netResult,
       'lowStockCount': lowStockCount,
       'cycleResults': cycleResults,
+      'cyclesForFilter': cyclesForFilter,
     };
   }
-    Widget _buildIndicatorCard({
+
+  Widget _buildIndicatorCard({
     required String title,
     required String value,
     required IconData icon,
@@ -246,8 +279,7 @@ class _CycleIndicatorsScreenState extends State<CycleIndicatorsScreen> {
       ),
     );
   }
-
-  @override
+    @override
   Widget build(BuildContext context) {
     return Directionality(
       textDirection: TextDirection.rtl,
@@ -275,11 +307,75 @@ class _CycleIndicatorsScreenState extends State<CycleIndicatorsScreen> {
             final cycleResults =
                 data['cycleResults'] as List<Map<String, dynamic>>;
 
+            final cyclesForFilter =
+                data['cyclesForFilter'] as List<Map<String, dynamic>>;
+
+            final netResult = data['netResult'] as num;
+            final lowStockCount = data['lowStockCount'] as int;
+
             return SingleChildScrollView(
               padding: const EdgeInsets.all(16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  Card(
+                    elevation: 3,
+                    child: Padding(
+                      padding: const EdgeInsets.all(14),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'فلتر المؤشرات',
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          DropdownButtonFormField<String>(
+                            initialValue: _selectedCycleId,
+                            decoration: const InputDecoration(
+                              labelText: 'اختر نطاق العرض',
+                              border: OutlineInputBorder(),
+                            ),
+                            items: [
+                              const DropdownMenuItem(
+                                value: 'all',
+                                child: Text('كل الدورات'),
+                              ),
+                              ...cyclesForFilter.map((cycle) {
+                                return DropdownMenuItem<String>(
+                                  value: cycle['id'].toString(),
+                                  child: Text(
+                                    '${cycle['code']} - ${cycle['name']}',
+                                  ),
+                                );
+                              }),
+                            ],
+                            onChanged: (value) {
+                              if (value == null) return;
+
+                              setState(() {
+                                _selectedCycleId = value;
+                              });
+                            },
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  Text(
+                    _selectedCycleId == 'all'
+                        ? 'المؤشرات العامة لكل الدورات'
+                        : 'مؤشرات الدورة المحددة',
+                    style: const TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
                   Wrap(
                     spacing: 12,
                     runSpacing: 12,
@@ -328,19 +424,19 @@ class _CycleIndicatorsScreenState extends State<CycleIndicatorsScreen> {
                       ),
                       _buildIndicatorCard(
                         title: 'صافي النتيجة',
-                        value: _formatNumber(data['netResult'] as num),
-                        icon: (data['netResult'] as num) >= 0
+                        value: _formatNumber(netResult),
+                        icon: netResult >= 0
                             ? Icons.emoji_events
                             : Icons.warning,
-                        color: (data['netResult'] as num) >= 0
+                        color: netResult >= 0
                             ? Colors.green
                             : Colors.red,
                       ),
                       _buildIndicatorCard(
                         title: 'أصناف مخزون منخفضة',
-                        value: data['lowStockCount'].toString(),
+                        value: lowStockCount.toString(),
                         icon: Icons.inventory,
-                        color: (data['lowStockCount'] as int) > 0
+                        color: lowStockCount > 0
                             ? Colors.red
                             : Colors.green,
                       ),
@@ -356,19 +452,19 @@ class _CycleIndicatorsScreenState extends State<CycleIndicatorsScreen> {
                   ),
                   const SizedBox(height: 12),
                   if (cycleResults.isEmpty)
-                    const Text('لا توجد دورات تسمين حتى الآن')
+                    const Text('لا توجد دورات في نطاق العرض المحدد')
                   else
                     ...cycleResults.map((cycle) {
-                      final netResult = cycle['netResult'] as double;
+                      final cycleNetResult = cycle['netResult'] as double;
 
                       return Card(
                         margin: const EdgeInsets.only(bottom: 8),
                         child: ListTile(
                           leading: Icon(
-                            netResult >= 0
+                            cycleNetResult >= 0
                                 ? Icons.trending_up
                                 : Icons.trending_down,
-                            color: netResult >= 0
+                            color: cycleNetResult >= 0
                                 ? Colors.green
                                 : Colors.red,
                           ),
@@ -382,7 +478,7 @@ class _CycleIndicatorsScreenState extends State<CycleIndicatorsScreen> {
                             'الحالة: ${cycle['status']}\n'
                             'المبيعات: ${_formatNumber(cycle['sales'] as num)}\n'
                             'المصروفات: ${_formatNumber(cycle['expenses'] as num)}\n'
-                            'الصافي: ${_formatNumber(netResult)}',
+                            'الصافي: ${_formatNumber(cycleNetResult)}',
                           ),
                         ),
                       );
