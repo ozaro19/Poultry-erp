@@ -535,6 +535,11 @@ class _CycleSummaryReportScreenState extends State<CycleSummaryReportScreen> {
     final pdf = pw.Document();
 
     final netResultTitle = netResult >= 0 ? 'صافي ربح' : 'صافي خسارة';
+    final netResultBackgroundColor =
+        netResult >= 0 ? PdfColors.green100 : PdfColors.red100;
+
+    final netResultBorderColor =
+        netResult >= 0 ? PdfColors.green : PdfColors.red;
 
     final reportData = [
       ['كود الدورة', cycleCode],
@@ -604,11 +609,24 @@ class _CycleSummaryReportScreenState extends State<CycleSummaryReportScreen> {
         crossAxisAlignment: pw.CrossAxisAlignment.start,
         children: [
           pw.SizedBox(height: 18),
-          pw.Text(
-            title,
-            style: pw.TextStyle(
-              fontSize: 15,
-              fontWeight: pw.FontWeight.bold,
+          pw.Container(
+            width: double.infinity,
+            padding: const pw.EdgeInsets.symmetric(
+              vertical: 6,
+              horizontal: 8,
+            ),
+            decoration: pw.BoxDecoration(
+              color: PdfColors.grey200,
+              border: pw.Border.all(
+                color: PdfColors.grey500,
+              ),
+            ),
+            child: pw.Text(
+              title,
+              style: pw.TextStyle(
+                fontSize: 15,
+                fontWeight: pw.FontWeight.bold,
+              ),
             ),
           ),
           pw.SizedBox(height: 8),
@@ -661,7 +679,44 @@ class _CycleSummaryReportScreenState extends State<CycleSummaryReportScreen> {
                 ),
               ),
             ),
-            pw.SizedBox(height: 20),
+            pw.Container(
+              width: double.infinity,
+              padding: const pw.EdgeInsets.all(12),
+              decoration: pw.BoxDecoration(
+                color: PdfColors.grey100,
+                border: pw.Border.all(
+                  color: PdfColors.grey600,
+                ),
+              ),
+              child: pw.Column(
+                crossAxisAlignment: pw.CrossAxisAlignment.center,
+                children: [
+                  pw.Text(
+                    'تقرير ملخص دورة تسمين',
+                    style: pw.TextStyle(
+                      fontSize: 22,
+                      fontWeight: pw.FontWeight.bold,
+                    ),
+                  ),
+                  pw.SizedBox(height: 6),
+                  pw.Text(
+                    '$cycleCode - $cycleName',
+                    style: pw.TextStyle(
+                      fontSize: 16,
+                      fontWeight: pw.FontWeight.bold,
+                    ),
+                  ),
+                  pw.SizedBox(height: 4),
+                  pw.Text(
+                    'الحالة: $status   |   السلالة: $breed',
+                    style: const pw.TextStyle(
+                      fontSize: 11,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            pw.SizedBox(height: 18),
             pw.TableHelper.fromTextArray(
               headers: ['القيمة', 'البيان'],
               data: reportData.map((row) => row.reversed.toList()).toList(),
@@ -677,6 +732,26 @@ class _CycleSummaryReportScreenState extends State<CycleSummaryReportScreen> {
               cellAlignment: pw.Alignment.centerRight,
               cellStyle: const pw.TextStyle(
                 fontSize: 11,
+              ),
+            ),
+            pw.SizedBox(height: 14),
+            pw.Container(
+              width: double.infinity,
+              padding: const pw.EdgeInsets.all(10),
+              decoration: pw.BoxDecoration(
+                color: netResultBackgroundColor,
+                border: pw.Border.all(
+                  color: netResultBorderColor,
+                ),
+              ),
+              child: pw.Center(
+                child: pw.Text(
+                  '$netResultTitle: ${_formatNumber(netResult.abs())}',
+                  style: pw.TextStyle(
+                    fontSize: 16,
+                    fontWeight: pw.FontWeight.bold,
+                  ),
+                ),
               ),
             ),
             buildDetailTable(
