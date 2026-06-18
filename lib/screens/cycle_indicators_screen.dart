@@ -11,6 +11,8 @@ class CycleIndicatorsScreen extends StatefulWidget {
 
 class _CycleIndicatorsScreenState extends State<CycleIndicatorsScreen> {
   String _selectedCycleId = 'all';
+  DateTime? _fromDate;
+  DateTime? _toDate;
 
   double _toDouble(dynamic value) {
     if (value is int) return value.toDouble();
@@ -26,6 +28,80 @@ class _CycleIndicatorsScreenState extends State<CycleIndicatorsScreen> {
     }
 
     return value.toStringAsFixed(2);
+  }
+  String _formatDate(DateTime? date) {
+    if (date == null) {
+      return 'غير محدد';
+    }
+
+    return '${date.year}-${date.month}-${date.day}';
+  }
+
+  DateTime _dateOnly(DateTime date) {
+    return DateTime(
+      date.year,
+      date.month,
+      date.day,
+    );
+  }
+
+  bool _recordMatchesDateRange(Map<String, dynamic> record) {
+    final dateValue = record['date'];
+
+    if (dateValue is! Timestamp) {
+      return true;
+    }
+
+    final recordDate = _dateOnly(dateValue.toDate());
+
+    if (_fromDate != null) {
+      final fromDate = _dateOnly(_fromDate!);
+
+      if (recordDate.isBefore(fromDate)) {
+        return false;
+      }
+    }
+
+    if (_toDate != null) {
+      final toDate = _dateOnly(_toDate!);
+
+      if (recordDate.isAfter(toDate)) {
+        return false;
+      }
+    }
+
+    return true;
+  }
+
+  Future<void> _pickDate({
+    required bool isFromDate,
+  }) async {
+    final initialDate = isFromDate
+        ? (_fromDate ?? DateTime.now())
+        : (_toDate ?? DateTime.now());
+
+    final pickedDate = await showDatePicker(
+      context: context,
+      initialDate: initialDate,
+      firstDate: DateTime(2020),
+      lastDate: DateTime(2100),
+    );
+
+    if (pickedDate == null) {
+      return;
+    }
+
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      if (isFromDate) {
+        _fromDate = pickedDate;
+      } else {
+        _toDate = pickedDate;
+      }
+    });
   }
     Future<Map<String, dynamic>> _loadIndicators() async {
     final cyclesSnapshot = await FirebaseFirestore.instance
@@ -94,13 +170,15 @@ class _CycleIndicatorsScreenState extends State<CycleIndicatorsScreen> {
     final filteredSales = sales.where((record) {
       final cycleId = (record['cycleId'] ?? '').toString();
 
-      return filteredCycleIds.contains(cycleId);
+      return filteredCycleIds.contains(cycleId) &&
+          _recordMatchesDateRange(record);
     }).toList();
 
     final filteredExpenses = expenses.where((record) {
       final cycleId = (record['cycleId'] ?? '').toString();
 
-      return filteredCycleIds.contains(cycleId);
+      return filteredCycleIds.contains(cycleId) &&
+          _recordMatchesDateRange(record);
     }).toList();
 
     final activeCycles = filteredCycles.where((cycle) {
@@ -360,6 +438,41 @@ class _CycleIndicatorsScreenState extends State<CycleIndicatorsScreen> {
                                 _selectedCycleId = value;
                               });
                             },
+                          ),
+                          const SizedBox(height: 12),
+                          Wrap(
+                            spacing: 12,
+                            runSpacing: 12,
+                            children: [
+                              OutlinedButton.icon(
+                                onPressed: () {
+                                  _pickDate(isFromDate: true);
+                                },
+                                icon: const Icon(Icons.date_range),
+                                label: Text(
+                                  'من: ${_formatDate(_fromDate)}',
+                                ),
+                              ),
+                              OutlinedButton.icon(
+                                onPressed: () {
+                                  _pickDate(isFromDate: false);
+                                },
+                                icon: const Icon(Icons.event),
+                                label: Text(
+                                  'إلى: ${_formatDate(_toDate)}',
+                                ),
+                              ),
+                              TextButton.icon(
+                                onPressed: () {
+                                  setState(() {
+                                    _fromDate = null;
+                                    _toDate = null;
+                                  });
+                                },
+                                icon: const Icon(Icons.refresh),
+                                label: const Text('مسح التاريخ'),
+                              ),
+                            ],
                           ),
                         ],
                       ),
