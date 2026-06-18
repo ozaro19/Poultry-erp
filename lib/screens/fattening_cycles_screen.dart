@@ -162,18 +162,6 @@ class _FatteningCyclesScreenState extends State<FatteningCyclesScreen> {
                 ),
               ),
               actions: [
-                IconButton(
-                  tooltip: 'لوحة المؤشرات',
-                  icon: const Icon(Icons.insights),
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => const CycleIndicatorsScreen(),
-                      ),
-                    );
-                  },
-                ),
                 TextButton(
                   onPressed: () => Navigator.pop(context),
                   child: const Text('إلغاء'),
@@ -543,6 +531,21 @@ class _FatteningCyclesScreenState extends State<FatteningCyclesScreen> {
         appBar: AppBar(
           title: const Text('دورات التسمين'),
           actions: [
+            TextButton.icon(
+              style: TextButton.styleFrom(
+                foregroundColor: Colors.black87,
+              ),
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const CycleIndicatorsScreen(),
+                  ),
+                );
+              },
+              icon: const Icon(Icons.insights),
+              label: const Text('المؤشرات'),
+            ),
             IconButton(
               tooltip: 'مبيعات الدورة',
               icon: const Icon(Icons.monetization_on),
