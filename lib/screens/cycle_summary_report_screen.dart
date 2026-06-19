@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/services.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
@@ -183,6 +184,7 @@ class _CycleSummaryReportScreenState extends State<CycleSummaryReportScreen> {
     );
 
     final netResult = totalSales - totalExpenses;
+
     records.sort((a, b) {
       final dateA =
           (a['date'] as Timestamp?)?.toDate() ?? DateTime(1900);
@@ -529,6 +531,37 @@ class _CycleSummaryReportScreenState extends State<CycleSummaryReportScreen> {
     );
 
     final netResult = totalSales - totalExpenses;
+    final settingsDocument = await FirebaseFirestore.instance
+        .collection('system_settings')
+        .doc('company')
+        .get();
+
+    final settingsData = settingsDocument.data();
+
+    final companyName =
+        (settingsData?['companyName'] ?? 'اسم الشركة تحت الإنشاء')
+            .toString();
+
+    final reportTitle =
+        (settingsData?['reportTitle'] ?? 'تقرير ملخص دورة تسمين')
+            .toString();
+
+    final phone =
+        (settingsData?['phone'] ?? '').toString();
+
+    final address =
+        (settingsData?['address'] ?? '').toString();
+
+    final footerNote =
+        (settingsData?['footerNote'] ?? '').toString();
+
+    final logoData = await rootBundle.load(
+      'assets/images/poultry_logo.png',
+    );
+
+    final logoImage = pw.MemoryImage(
+      logoData.buffer.asUint8List(),
+    );
         final regularFont = await PdfGoogleFonts.cairoRegular();
     final boldFont = await PdfGoogleFonts.cairoBold();
 
@@ -662,7 +695,7 @@ class _CycleSummaryReportScreenState extends State<CycleSummaryReportScreen> {
           return [
             pw.Center(
               child: pw.Text(
-                'تقرير ملخص دورة تسمين',
+                reportTitle,
                 style: pw.TextStyle(
                   fontSize: 22,
                   fontWeight: pw.FontWeight.bold,
@@ -691,8 +724,40 @@ class _CycleSummaryReportScreenState extends State<CycleSummaryReportScreen> {
               child: pw.Column(
                 crossAxisAlignment: pw.CrossAxisAlignment.center,
                 children: [
+                  pw.Image(
+                    logoImage,
+                    width: 60,
+                    height: 60,
+                  ),
+                  pw.SizedBox(height: 6),
                   pw.Text(
-                    'تقرير ملخص دورة تسمين',
+                    companyName,
+                    style: pw.TextStyle(
+                      fontSize: 13,
+                      fontWeight: pw.FontWeight.bold,
+                    ),
+                  ),
+                  if (phone.isNotEmpty) ...[
+                    pw.SizedBox(height: 3),
+                    pw.Text(
+                      'هاتف: $phone',
+                      style: const pw.TextStyle(
+                        fontSize: 9,
+                      ),
+                    ),
+                  ],
+                  if (address.isNotEmpty) ...[
+                    pw.SizedBox(height: 3),
+                    pw.Text(
+                      'العنوان: $address',
+                      style: const pw.TextStyle(
+                        fontSize: 9,
+                      ),
+                    ),
+                  ],
+                  pw.SizedBox(height: 8),
+                  pw.Text(
+                    reportTitle,
                     style: pw.TextStyle(
                       fontSize: 22,
                       fontWeight: pw.FontWeight.bold,
@@ -789,7 +854,9 @@ class _CycleSummaryReportScreenState extends State<CycleSummaryReportScreen> {
             ),
             pw.SizedBox(height: 20),
             pw.Text(
-              'ملاحظة: صافي الربح أو الخسارة = إجمالي المبيعات - إجمالي المصروفات المسجلة.',
+              footerNote.isEmpty
+                  ? 'ملاحظة: صافي الربح أو الخسارة = إجمالي المبيعات - إجمالي المصروفات المسجلة.'
+                  : footerNote,
               style: const pw.TextStyle(
                 fontSize: 10,
               ),
