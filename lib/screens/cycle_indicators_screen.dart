@@ -158,6 +158,18 @@ class _CycleIndicatorsScreenState extends State<CycleIndicatorsScreen> {
     final companyName =
         (settingsData?['companyName'] ?? 'اسم الشركة تحت الإنشاء')
             .toString();
+    final reportTitle =
+        (settingsData?['reportTitle'] ?? 'لوحة مؤشرات دورات التسمين')
+            .toString();
+
+    final phone =
+        (settingsData?['phone'] ?? '').toString();
+
+    final address =
+        (settingsData?['address'] ?? '').toString();
+
+    final footerNote =
+        (settingsData?['footerNote'] ?? '').toString();
 
     final regularFont = await PdfGoogleFonts.cairoRegular();
     final boldFont = await PdfGoogleFonts.cairoBold();
@@ -307,10 +319,34 @@ class _CycleIndicatorsScreenState extends State<CycleIndicatorsScreen> {
                       ),
                     ),
                   ),
+                  if (phone.isNotEmpty) ...[
+                    pw.SizedBox(height: 4),
+                    pw.Center(
+                      child: pw.Text(
+                        'هاتف: $phone',
+                        style: const pw.TextStyle(
+                          fontSize: 9,
+                          color: PdfColors.grey700,
+                        ),
+                      ),
+                    ),
+                  ],
+                  if (address.isNotEmpty) ...[
+                    pw.SizedBox(height: 4),
+                    pw.Center(
+                      child: pw.Text(
+                        'العنوان: $address',
+                        style: const pw.TextStyle(
+                          fontSize: 9,
+                          color: PdfColors.grey700,
+                        ),
+                      ),
+                    ),
+                  ],
                   pw.SizedBox(height: 8),
                   pw.Center(
                     child: pw.Text(
-                      'لوحة مؤشرات دورات التسمين',
+                      reportTitle,
                       style: pw.TextStyle(
                         fontSize: 18,
                         fontWeight: pw.FontWeight.bold,
@@ -337,6 +373,16 @@ class _CycleIndicatorsScreenState extends State<CycleIndicatorsScreen> {
                       fontSize: 10,
                     ),
                   ),
+                  if (footerNote.isNotEmpty) ...[
+                    pw.SizedBox(height: 4),
+                    pw.Text(
+                      'ملاحظات التقرير: $footerNote',
+                      style: const pw.TextStyle(
+                        fontSize: 10,
+                        color: PdfColors.grey700,
+                      ),
+                    ),
+                  ],
                   pw.SizedBox(height: 16),
                   pw.Text(
                     'التنبيهات الذكية',
