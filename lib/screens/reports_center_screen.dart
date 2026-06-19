@@ -5,6 +5,7 @@ import 'cycle_summary_report_screen.dart';
 import 'inventory_balances_report_screen.dart';
 import 'account_ledger_screen.dart';
 import 'trial_balance_screen.dart';
+import 'item_card_report_screen.dart';
 
 class ReportsCenterScreen extends StatelessWidget {
   const ReportsCenterScreen({super.key});
@@ -135,6 +136,14 @@ class ReportsCenterScreen extends StatelessWidget {
                         icon: Icons.inventory,
                         color: Colors.orange,
                         screen: const InventoryBalancesReportScreen(),
+                      ),
+                      _buildReportCard(
+                        context: context,
+                        title: 'كارت الصنف',
+                        subtitle: 'عرض حركة صنف محدد من إضافات وصرف ورصيد',
+                        icon: Icons.assignment,
+                        color: Colors.deepPurple,
+                        screen: const ItemCardReportScreen(),
                       ),
                       _buildReportCard(
                         context: context,
