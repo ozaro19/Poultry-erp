@@ -148,6 +148,16 @@ class _CycleIndicatorsScreenState extends State<CycleIndicatorsScreen> {
 
   Future<void> _printIndicatorsPdf() async {
     final data = await _loadIndicators();
+    final settingsDocument = await FirebaseFirestore.instance
+        .collection('system_settings')
+        .doc('company')
+        .get();
+
+    final settingsData = settingsDocument.data();
+
+    final companyName =
+        (settingsData?['companyName'] ?? 'اسم الشركة تحت الإنشاء')
+            .toString();
 
     final regularFont = await PdfGoogleFonts.cairoRegular();
     final boldFont = await PdfGoogleFonts.cairoBold();
@@ -290,7 +300,7 @@ class _CycleIndicatorsScreenState extends State<CycleIndicatorsScreen> {
                   pw.SizedBox(height: 4),
                   pw.Center(
                     child: pw.Text(
-                      'اسم الشركة: المزرعة السعيدة',
+                      companyName,
                       style: const pw.TextStyle(
                         fontSize: 10,
                         color: PdfColors.grey700,

@@ -10,6 +10,7 @@ import 'inventory_items_screen.dart';
 import 'inventory_transactions_screen.dart';
 import 'fattening_cycles_screen.dart';
 import 'cycle_indicators_screen.dart';
+import 'system_settings_screen.dart';
 
 class DashboardScreen extends StatelessWidget {
   const DashboardScreen({super.key});
@@ -403,6 +404,19 @@ class DashboardScreen extends StatelessWidget {
                         'الأصول',
                         Icons.business,
                         () {},
+                      ),
+                      _MenuCard(
+                        'إعدادات النظام',
+                        Icons.settings,
+                        () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) =>
+                                  const SystemSettingsScreen(),
+                            ),
+                          );
+                        },
                       ),
                       _MenuCard(
                         'التقارير',
