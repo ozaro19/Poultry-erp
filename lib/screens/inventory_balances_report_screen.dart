@@ -1,8 +1,7 @@
 import 'dart:convert';
-import 'dart:typed_data';
-
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/services.dart';
 import 'package:file_saver/file_saver.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
@@ -139,6 +138,42 @@ class _InventoryBalancesReportScreenState
       return;
     }
 
+    final settingsDocument = await FirebaseFirestore.instance
+        .collection('system_settings')
+        .doc('company')
+        .get();
+
+    final settingsData = settingsDocument.data();
+
+    final companyName =
+        (settingsData?['companyName'] ?? 'اسم الشركة تحت الإنشاء')
+            .toString();
+
+    final reportTitle =
+        (settingsData?['reportTitle'] ?? 'نظام إدارة مزارع الدواجن')
+            .toString();
+
+    final phone =
+        (settingsData?['phone'] ?? '').toString();
+
+    final address =
+        (settingsData?['address'] ?? '').toString();
+
+    final footerNote =
+        (settingsData?['footerNote'] ?? '').toString();
+
+    final currentReportTitle = showLowStockOnly
+        ? 'تقرير الأصناف منخفضة الرصيد'
+        : 'تقرير أرصدة المخزون';
+
+    final logoData = await rootBundle.load(
+      'assets/images/poultry_logo.png',
+    );
+
+    final logoImage = pw.MemoryImage(
+      logoData.buffer.asUint8List(),
+    );
+
     final regularFont = await PdfGoogleFonts.cairoRegular();
     final boldFont = await PdfGoogleFonts.cairoBold();
 
@@ -173,15 +208,66 @@ class _InventoryBalancesReportScreenState
         ),
         build: (context) {
           return [
-            pw.Center(
-              child: pw.Text(
-                showLowStockOnly
-                    ? 'تقرير الأصناف منخفضة الرصيد'
-                    : 'تقرير أرصدة المخزون',
-                style: pw.TextStyle(
-                  fontSize: 18,
-                  fontWeight: pw.FontWeight.bold,
+            pw.Container(
+              width: double.infinity,
+              padding: const pw.EdgeInsets.all(10),
+              decoration: pw.BoxDecoration(
+                color: PdfColors.grey100,
+                border: pw.Border.all(
+                  color: PdfColors.grey600,
                 ),
+              ),
+              child: pw.Column(
+                crossAxisAlignment: pw.CrossAxisAlignment.center,
+                children: [
+                  pw.Image(
+                    logoImage,
+                    width: 55,
+                    height: 55,
+                  ),
+                  pw.SizedBox(height: 5),
+                  pw.Text(
+                    companyName,
+                    style: pw.TextStyle(
+                      fontSize: 13,
+                      fontWeight: pw.FontWeight.bold,
+                    ),
+                  ),
+                  if (phone.isNotEmpty) ...[
+                    pw.SizedBox(height: 3),
+                    pw.Text(
+                      'هاتف: $phone',
+                      style: const pw.TextStyle(
+                        fontSize: 9,
+                      ),
+                    ),
+                  ],
+                  if (address.isNotEmpty) ...[
+                    pw.SizedBox(height: 3),
+                    pw.Text(
+                      'العنوان: $address',
+                      style: const pw.TextStyle(
+                        fontSize: 9,
+                      ),
+                    ),
+                  ],
+                  pw.SizedBox(height: 8),
+                  pw.Text(
+                    reportTitle,
+                    style: pw.TextStyle(
+                      fontSize: 15,
+                      fontWeight: pw.FontWeight.bold,
+                    ),
+                  ),
+                  pw.SizedBox(height: 4),
+                  pw.Text(
+                    currentReportTitle,
+                    style: pw.TextStyle(
+                      fontSize: 18,
+                      fontWeight: pw.FontWeight.bold,
+                    ),
+                  ),
+                ],
               ),
             ),
             pw.SizedBox(height: 16),
@@ -229,6 +315,16 @@ class _InventoryBalancesReportScreenState
                 }),
               ],
             ),
+            if (footerNote.isNotEmpty) ...[
+              pw.SizedBox(height: 12),
+              pw.Text(
+                footerNote,
+                style: const pw.TextStyle(
+                  fontSize: 10,
+                  color: PdfColors.grey700,
+                ),
+              ),
+            ],
           ];
         },
       ),
