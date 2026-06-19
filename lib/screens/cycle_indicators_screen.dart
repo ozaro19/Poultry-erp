@@ -165,6 +165,8 @@ class _CycleIndicatorsScreenState extends State<CycleIndicatorsScreen> {
     final cyclesForFilter =
         data['cyclesForFilter'] as List<Map<String, dynamic>>;
 
+    final alerts = (data['alerts'] as List).cast<Map<String, dynamic>>();
+
     final netResult = data['netResult'] as num;
     final lowStockCount = data['lowStockCount'] as int;
 
@@ -325,6 +327,48 @@ class _CycleIndicatorsScreenState extends State<CycleIndicatorsScreen> {
                       fontSize: 10,
                     ),
                   ),
+                  pw.SizedBox(height: 16),
+                  pw.Text(
+                    'التنبيهات الذكية',
+                    style: pw.TextStyle(
+                      fontSize: 14,
+                      fontWeight: pw.FontWeight.bold,
+                    ),
+                  ),
+                  pw.SizedBox(height: 6),
+                  ...alerts.map((alert) {
+                    final level = (alert['level'] ?? '').toString();
+                    final title = (alert['title'] ?? '').toString();
+                    final message = (alert['message'] ?? '').toString();
+
+                    final color = level == 'danger'
+                        ? PdfColors.red
+                        : level == 'warning'
+                            ? PdfColors.orange
+                            : level == 'success'
+                                ? PdfColors.green
+                                : PdfColors.blueGrey;
+
+                    return pw.Container(
+                      width: double.infinity,
+                      margin: const pw.EdgeInsets.only(bottom: 6),
+                      padding: const pw.EdgeInsets.all(8),
+                      decoration: pw.BoxDecoration(
+                        border: pw.Border.all(
+                          color: color,
+                        ),
+                        borderRadius: pw.BorderRadius.circular(4),
+                      ),
+                      child: pw.Text(
+                        '$title - $message',
+                        style: pw.TextStyle(
+                          fontSize: 10,
+                          fontWeight: pw.FontWeight.bold,
+                          color: color,
+                        ),
+                      ),
+                    );
+                  }),
                   pw.SizedBox(height: 16),
                   pw.Text(
                     'المؤشرات العامة',
@@ -717,6 +761,48 @@ class _CycleIndicatorsScreenState extends State<CycleIndicatorsScreen> {
 
     final netResult = totalSales - totalExpenses;
 
+    final alerts = <Map<String, String>>[];
+
+    if (lowStockCount > 0) {
+      alerts.add({
+        'level': 'danger',
+        'title': 'تنبيه مخزون',
+        'message': 'يوجد $lowStockCount صنف مخزون منخفض',
+      });
+    }
+
+    if (netResult < 0) {
+      alerts.add({
+        'level': 'danger',
+        'title': 'تنبيه خسارة',
+        'message': 'الدورة أو النطاق الحالي يحقق خسارة',
+      });
+    }
+
+    if (mortalityRate >= 5) {
+      alerts.add({
+        'level': 'warning',
+        'title': 'تنبيه نفوق',
+        'message': 'نسبة النفوق مرتفعة: ${_formatNumber(mortalityRate)}%',
+      });
+    }
+
+    if (fcr > 0 && fcr >= 2) {
+      alerts.add({
+        'level': 'warning',
+        'title': 'تنبيه FCR',
+        'message': 'معامل التحويل الغذائي مرتفع: ${_formatNumber(fcr)}',
+      });
+    }
+
+    if (alerts.isEmpty) {
+      alerts.add({
+        'level': 'success',
+        'title': 'الوضع مطمئن',
+        'message': 'لا توجد تنبيهات حرجة في النطاق الحالي',
+      });
+    }
+
     return {
       'totalCycles': filteredCycles.length,
       'activeCycles': activeCycles,
@@ -737,6 +823,7 @@ class _CycleIndicatorsScreenState extends State<CycleIndicatorsScreen> {
       'totalProfit': totalProfit,
       'totalLoss': totalLoss,
       'netResult': netResult,
+      'alerts': alerts,
       'lowStockCount': lowStockCount,
       'cycleResults': cycleResults,
       'cyclesForFilter': cyclesForFilter,
@@ -786,6 +873,64 @@ class _CycleIndicatorsScreenState extends State<CycleIndicatorsScreen> {
       ),
     );
   }
+    Color _alertColor(String level) {
+    if (level == 'danger') {
+      return Colors.red;
+    }
+
+    if (level == 'warning') {
+      return Colors.deepOrange;
+    }
+
+    if (level == 'success') {
+      return Colors.green;
+    }
+
+    return Colors.blueGrey;
+  }
+
+  IconData _alertIcon(String level) {
+    if (level == 'danger') {
+      return Icons.error;
+    }
+
+    if (level == 'warning') {
+      return Icons.warning;
+    }
+
+    if (level == 'success') {
+      return Icons.check_circle;
+    }
+
+    return Icons.info;
+  }
+
+  Widget _buildAlertCard(Map<String, dynamic> alert) {
+    final level = (alert['level'] ?? '').toString();
+    final title = (alert['title'] ?? '').toString();
+    final message = (alert['message'] ?? '').toString();
+
+    final color = _alertColor(level);
+
+    return Card(
+      elevation: 3,
+      child: ListTile(
+        leading: Icon(
+          _alertIcon(level),
+          color: color,
+          size: 32,
+        ),
+        title: Text(
+          title,
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            color: color,
+          ),
+        ),
+        subtitle: Text(message),
+      ),
+    );
+  }
     @override
   Widget build(BuildContext context) {
     return Directionality(
@@ -828,6 +973,8 @@ class _CycleIndicatorsScreenState extends State<CycleIndicatorsScreen> {
 
             final netResult = data['netResult'] as num;
             final lowStockCount = data['lowStockCount'] as int;
+
+            final alerts = (data['alerts'] as List).cast<Map<String, dynamic>>();
 
             return SingleChildScrollView(
               padding: const EdgeInsets.all(16),
@@ -916,6 +1063,18 @@ class _CycleIndicatorsScreenState extends State<CycleIndicatorsScreen> {
                       ),
                     ),
                   ),
+                  const SizedBox(height: 24),
+                  const Text(
+                    'التنبيهات الذكية',
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  ...alerts.map((alert) {
+                    return _buildAlertCard(alert);
+                  }),
                   const SizedBox(height: 24),
                   Text(
                     _selectedCycleId == 'all'
