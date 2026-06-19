@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/services.dart';
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:printing/printing.dart';
 
 class ProfitLossReportScreen extends StatefulWidget {
   const ProfitLossReportScreen({super.key});
@@ -338,6 +342,203 @@ class _ProfitLossReportScreenState extends State<ProfitLossReportScreen> {
     );
   }
 
+  Future<void> _printReport() async {
+    final data = await _loadReport();
+
+    final totalSales = _toDouble(data['totalSales']);
+    final totalExpenses = _toDouble(data['totalExpenses']);
+    final netResult = _toDouble(data['netResult']);
+
+    final salesCount = data['salesCount'] ?? 0;
+    final expensesCount = data['expensesCount'] ?? 0;
+    final cyclesCount = data['cyclesCount'] ?? 0;
+
+    final settingsDocument = await FirebaseFirestore.instance
+        .collection('system_settings')
+        .doc('company')
+        .get();
+
+    final settingsData = settingsDocument.data();
+
+    final companyName =
+        (settingsData?['companyName'] ?? 'اسم الشركة تحت الإنشاء')
+            .toString();
+
+    final reportTitle =
+        (settingsData?['reportTitle'] ?? 'نظام إدارة مزارع الدواجن')
+            .toString();
+
+    final phone =
+        (settingsData?['phone'] ?? '').toString();
+
+    final address =
+        (settingsData?['address'] ?? '').toString();
+
+    final footerNote =
+        (settingsData?['footerNote'] ?? '').toString();
+
+    final logoData = await rootBundle.load(
+      'assets/images/poultry_logo.png',
+    );
+
+    final logoImage = pw.MemoryImage(
+      logoData.buffer.asUint8List(),
+    );
+
+    final regularFont = await PdfGoogleFonts.cairoRegular();
+    final boldFont = await PdfGoogleFonts.cairoBold();
+
+    final pdf = pw.Document();
+
+    final netResultTitle = netResult >= 0 ? 'صافي ربح' : 'صافي خسارة';
+
+    final netResultBackgroundColor =
+        netResult >= 0 ? PdfColors.green100 : PdfColors.red100;
+
+    final netResultBorderColor =
+        netResult >= 0 ? PdfColors.green : PdfColors.red;
+
+    final reportRows = [
+      ['الفترة من', _formatDate(fromDate)],
+      ['الفترة إلى', _formatDate(toDate)],
+      ['إجمالي المبيعات', _formatNumber(totalSales)],
+      ['إجمالي المصروفات', _formatNumber(totalExpenses)],
+      [netResultTitle, _formatNumber(netResult.abs())],
+      ['عدد عمليات البيع', salesCount.toString()],
+      ['عدد بنود المصروفات', expensesCount.toString()],
+      ['عدد الدورات المرتبطة', cyclesCount.toString()],
+    ];
+
+    pdf.addPage(
+      pw.MultiPage(
+        pageFormat: PdfPageFormat.a4,
+        textDirection: pw.TextDirection.rtl,
+        theme: pw.ThemeData.withFont(
+          base: regularFont,
+          bold: boldFont,
+        ),
+        build: (context) {
+          return [
+            pw.Container(
+              width: double.infinity,
+              padding: const pw.EdgeInsets.all(12),
+              decoration: pw.BoxDecoration(
+                color: PdfColors.grey100,
+                border: pw.Border.all(
+                  color: PdfColors.grey600,
+                ),
+              ),
+              child: pw.Column(
+                crossAxisAlignment: pw.CrossAxisAlignment.center,
+                children: [
+                  pw.Image(
+                    logoImage,
+                    width: 60,
+                    height: 60,
+                  ),
+                  pw.SizedBox(height: 6),
+                  pw.Text(
+                    companyName,
+                    style: pw.TextStyle(
+                      fontSize: 13,
+                      fontWeight: pw.FontWeight.bold,
+                    ),
+                  ),
+                  if (phone.isNotEmpty) ...[
+                    pw.SizedBox(height: 3),
+                    pw.Text(
+                      'هاتف: $phone',
+                      style: const pw.TextStyle(
+                        fontSize: 9,
+                      ),
+                    ),
+                  ],
+                  if (address.isNotEmpty) ...[
+                    pw.SizedBox(height: 3),
+                    pw.Text(
+                      'العنوان: $address',
+                      style: const pw.TextStyle(
+                        fontSize: 9,
+                      ),
+                    ),
+                  ],
+                  pw.SizedBox(height: 8),
+                  pw.Text(
+                    reportTitle,
+                    style: pw.TextStyle(
+                      fontSize: 15,
+                      fontWeight: pw.FontWeight.bold,
+                    ),
+                  ),
+                  pw.SizedBox(height: 4),
+                  pw.Text(
+                    'تقرير أرباح وخسائر عام',
+                    style: pw.TextStyle(
+                      fontSize: 20,
+                      fontWeight: pw.FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            pw.SizedBox(height: 16),
+            pw.TableHelper.fromTextArray(
+              headers: ['القيمة', 'البيان'],
+              data: reportRows.map((row) => row.reversed.toList()).toList(),
+              border: pw.TableBorder.all(
+                color: PdfColors.grey600,
+              ),
+              headerDecoration: const pw.BoxDecoration(
+                color: PdfColors.grey300,
+              ),
+              headerStyle: pw.TextStyle(
+                fontWeight: pw.FontWeight.bold,
+              ),
+              cellAlignment: pw.Alignment.centerRight,
+              cellStyle: const pw.TextStyle(
+                fontSize: 11,
+              ),
+            ),
+            pw.SizedBox(height: 14),
+            pw.Container(
+              width: double.infinity,
+              padding: const pw.EdgeInsets.all(10),
+              decoration: pw.BoxDecoration(
+                color: netResultBackgroundColor,
+                border: pw.Border.all(
+                  color: netResultBorderColor,
+                ),
+              ),
+              child: pw.Center(
+                child: pw.Text(
+                  '$netResultTitle: ${_formatNumber(netResult.abs())}',
+                  style: pw.TextStyle(
+                    fontSize: 16,
+                    fontWeight: pw.FontWeight.bold,
+                  ),
+                ),
+              ),
+            ),
+            if (footerNote.isNotEmpty) ...[
+              pw.SizedBox(height: 14),
+              pw.Text(
+                footerNote,
+                style: const pw.TextStyle(
+                  fontSize: 10,
+                  color: PdfColors.grey700,
+                ),
+              ),
+            ],
+          ];
+        },
+      ),
+    );
+
+    await Printing.layoutPdf(
+      onLayout: (format) async => pdf.save(),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Directionality(
@@ -346,6 +547,11 @@ class _ProfitLossReportScreenState extends State<ProfitLossReportScreen> {
         appBar: AppBar(
           title: const Text('تقرير أرباح وخسائر عام'),
           actions: [
+            IconButton(
+              tooltip: 'طباعة PDF',
+              icon: const Icon(Icons.picture_as_pdf),
+              onPressed: _printReport,
+            ),
             IconButton(
               tooltip: 'تحديث التقرير',
               icon: const Icon(Icons.refresh),
