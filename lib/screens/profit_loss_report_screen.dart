@@ -97,6 +97,21 @@ class _ProfitLossReportScreenState extends State<ProfitLossReportScreen> {
         .collection('cycle_expenses')
         .get();
 
+    final cyclesSnapshot = await FirebaseFirestore.instance
+        .collection('fattening_cycles')
+        .get();
+
+    final cycleInfoById = <String, Map<String, String>>{};
+
+    for (final doc in cyclesSnapshot.docs) {
+      final data = doc.data();
+
+      cycleInfoById[doc.id] = {
+        'code': (data['code'] ?? '').toString(),
+        'name': (data['name'] ?? '').toString(),
+      };
+    }
+
     final salesRecords = salesSnapshot.docs.map((doc) {
       return doc.data();
     }).where((record) {
@@ -119,23 +134,74 @@ class _ProfitLossReportScreenState extends State<ProfitLossReportScreen> {
       (total, record) => total + _toDouble(record['amount']),
     );
 
-    final relatedCycleIds = <String>{};
+    final cycleTotals = <String, Map<String, double>>{};
+
+    void ensureCycle(String cycleId) {
+      cycleTotals.putIfAbsent(
+        cycleId,
+        () => {
+          'sales': 0,
+          'expenses': 0,
+        },
+      );
+    }
 
     for (final record in salesRecords) {
       final cycleId = (record['cycleId'] ?? '').toString();
 
-      if (cycleId.isNotEmpty) {
-        relatedCycleIds.add(cycleId);
+      if (cycleId.isEmpty) {
+        continue;
       }
+
+      ensureCycle(cycleId);
+
+      cycleTotals[cycleId]!['sales'] =
+          cycleTotals[cycleId]!['sales']! +
+              _toDouble(record['totalAmount']);
     }
 
     for (final record in expenseRecords) {
       final cycleId = (record['cycleId'] ?? '').toString();
 
-      if (cycleId.isNotEmpty) {
-        relatedCycleIds.add(cycleId);
+      if (cycleId.isEmpty) {
+        continue;
       }
+
+      ensureCycle(cycleId);
+
+      cycleTotals[cycleId]!['expenses'] =
+          cycleTotals[cycleId]!['expenses']! +
+              _toDouble(record['amount']);
     }
+
+    final cycleDetails = cycleTotals.entries.map((entry) {
+      final cycleId = entry.key;
+      final totals = entry.value;
+
+      final cycleInfo = cycleInfoById[cycleId];
+
+      final cycleCode = cycleInfo?['code'] ?? '';
+      final cycleName = cycleInfo?['name'] ?? 'دورة غير معروفة';
+
+      final cycleSales = totals['sales'] ?? 0;
+      final cycleExpenses = totals['expenses'] ?? 0;
+      final cycleNetResult = cycleSales - cycleExpenses;
+
+      return {
+        'cycleId': cycleId,
+        'cycleCode': cycleCode,
+        'cycleName': cycleName,
+        'totalSales': cycleSales,
+        'totalExpenses': cycleExpenses,
+        'netResult': cycleNetResult,
+      };
+    }).toList();
+
+    cycleDetails.sort((a, b) {
+      return a['cycleCode'].toString().compareTo(
+            b['cycleCode'].toString(),
+          );
+    });
 
     final netResult = totalSales - totalExpenses;
 
@@ -145,7 +211,8 @@ class _ProfitLossReportScreenState extends State<ProfitLossReportScreen> {
       'netResult': netResult,
       'salesCount': salesRecords.length,
       'expensesCount': expenseRecords.length,
-      'cyclesCount': relatedCycleIds.length,
+      'cyclesCount': cycleDetails.length,
+      'cycleDetails': cycleDetails,
     };
   }
 
@@ -284,6 +351,10 @@ class _ProfitLossReportScreenState extends State<ProfitLossReportScreen> {
     final expensesCount = data['expensesCount'] ?? 0;
     final cyclesCount = data['cyclesCount'] ?? 0;
 
+    final cycleDetails = (data['cycleDetails'] as List<dynamic>? ?? [])
+        .map((item) => item as Map<String, dynamic>)
+        .toList();
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -338,6 +409,72 @@ class _ProfitLossReportScreenState extends State<ProfitLossReportScreen> {
             ),
           ],
         ),
+        if (cycleDetails.isNotEmpty) ...[
+          const SizedBox(height: 28),
+          const Text(
+            'الأرباح والخسائر حسب الدورة',
+            style: TextStyle(
+              fontSize: 21,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Card(
+            elevation: 3,
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: DataTable(
+                columns: const [
+                  DataColumn(label: Text('الدورة')),
+                  DataColumn(label: Text('المبيعات')),
+                  DataColumn(label: Text('المصروفات')),
+                  DataColumn(label: Text('النتيجة')),
+                ],
+                rows: cycleDetails.map((cycle) {
+                  final cycleCode =
+                      (cycle['cycleCode'] ?? '').toString();
+
+                  final cycleName =
+                      (cycle['cycleName'] ?? '').toString();
+
+                  final cycleSales =
+                      _toDouble(cycle['totalSales']);
+
+                  final cycleExpenses =
+                      _toDouble(cycle['totalExpenses']);
+
+                  final cycleNetResult =
+                      _toDouble(cycle['netResult']);
+
+                  return DataRow(
+                    cells: [
+                      DataCell(
+                        Text('$cycleCode - $cycleName'),
+                      ),
+                      DataCell(
+                        Text(_formatNumber(cycleSales)),
+                      ),
+                      DataCell(
+                        Text(_formatNumber(cycleExpenses)),
+                      ),
+                      DataCell(
+                        Text(
+                          _formatNumber(cycleNetResult.abs()),
+                          style: TextStyle(
+                            color: cycleNetResult >= 0
+                                ? Colors.green
+                                : Colors.red,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ],
+                  );
+                }).toList(),
+              ),
+            ),
+          ),
+        ],
       ],
     );
   }
@@ -352,6 +489,9 @@ class _ProfitLossReportScreenState extends State<ProfitLossReportScreen> {
     final salesCount = data['salesCount'] ?? 0;
     final expensesCount = data['expensesCount'] ?? 0;
     final cyclesCount = data['cyclesCount'] ?? 0;
+    final cycleDetails = (data['cycleDetails'] as List<dynamic>? ?? [])
+        .map((item) => item as Map<String, dynamic>)
+        .toList();
 
     final settingsDocument = await FirebaseFirestore.instance
         .collection('system_settings')
@@ -408,6 +548,24 @@ class _ProfitLossReportScreenState extends State<ProfitLossReportScreen> {
       ['عدد بنود المصروفات', expensesCount.toString()],
       ['عدد الدورات المرتبطة', cyclesCount.toString()],
     ];
+
+      final cycleRows = cycleDetails.map<List<String>>((cycle) {
+      final cycleCode = (cycle['cycleCode'] ?? '').toString();
+      final cycleName = (cycle['cycleName'] ?? '').toString();
+
+      final cycleSales = _toDouble(cycle['totalSales']);
+      final cycleExpenses = _toDouble(cycle['totalExpenses']);
+      final cycleNetResult = _toDouble(cycle['netResult']);
+
+      final resultTitle = cycleNetResult >= 0 ? 'ربح' : 'خسارة';
+
+      return [
+        '$cycleCode - $cycleName',
+        _formatNumber(cycleSales),
+        _formatNumber(cycleExpenses),
+        '$resultTitle ${_formatNumber(cycleNetResult.abs())}',
+      ];
+    }).toList();
 
     pdf.addPage(
       pw.MultiPage(
@@ -519,6 +677,39 @@ class _ProfitLossReportScreenState extends State<ProfitLossReportScreen> {
                 ),
               ),
             ),
+            if (cycleRows.isNotEmpty) ...[
+              pw.SizedBox(height: 18),
+              pw.Text(
+                'الأرباح والخسائر حسب الدورة',
+                style: pw.TextStyle(
+                  fontSize: 15,
+                  fontWeight: pw.FontWeight.bold,
+                ),
+              ),
+              pw.SizedBox(height: 8),
+              pw.TableHelper.fromTextArray(
+                headers: [
+                  'النتيجة',
+                  'المصروفات',
+                  'المبيعات',
+                  'الدورة',
+                ],
+                data: cycleRows.map((row) => row.reversed.toList()).toList(),
+                border: pw.TableBorder.all(
+                  color: PdfColors.grey600,
+                ),
+                headerDecoration: const pw.BoxDecoration(
+                  color: PdfColors.grey300,
+                ),
+                headerStyle: pw.TextStyle(
+                  fontWeight: pw.FontWeight.bold,
+                ),
+                cellAlignment: pw.Alignment.centerRight,
+                cellStyle: const pw.TextStyle(
+                  fontSize: 9,
+                ),
+              ),
+            ],
             if (footerNote.isNotEmpty) ...[
               pw.SizedBox(height: 14),
               pw.Text(
