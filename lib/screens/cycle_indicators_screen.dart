@@ -194,6 +194,26 @@ class _CycleIndicatorsScreenState extends State<CycleIndicatorsScreen> {
         'value': _formatNumber(data['totalFeed'] as num),
       },
       {
+        'title': 'إجمالي الوزن المباع',
+        'value': _formatNumber(data['totalSoldWeight'] as num),
+      },
+      {
+        'title': 'آخر متوسط وزن',
+        'value': _formatNumber(data['latestAverageWeight'] as num),
+      },
+      {
+        'title': 'تكلفة الطائر الواحد',
+        'value': _formatNumber(data['costPerBird'] as num),
+      },
+      {
+        'title': 'تكلفة الكيلو',
+        'value': _formatNumber(data['costPerKilo'] as num),
+      },
+      {
+        'title': 'FCR معامل التحويل',
+        'value': _formatNumber(data['fcr'] as num),
+      },
+      {
         'title': 'إجمالي الدورات',
         'value': data['totalCycles'].toString(),
       },
@@ -537,6 +557,40 @@ class _CycleIndicatorsScreenState extends State<CycleIndicatorsScreen> {
         ? 0.0
         : (totalMortality / totalInitialChicks) * 100;
 
+        final totalSoldWeight = filteredSales.fold<double>(
+      0,
+      (total, record) => total + _toDouble(record['totalWeight']),
+    );
+
+    final sortedFollowups = [...filteredFollowups];
+
+    sortedFollowups.sort((a, b) {
+      final aDateValue = a['date'];
+      final bDateValue = b['date'];
+
+      final aDate = aDateValue is Timestamp
+          ? aDateValue.toDate()
+          : DateTime(1900);
+
+      final bDate = bDateValue is Timestamp
+          ? bDateValue.toDate()
+          : DateTime(1900);
+
+      return bDate.compareTo(aDate);
+    });
+
+    final latestAverageWeight = sortedFollowups.isEmpty
+        ? 0.0
+        : _toDouble(sortedFollowups.first['averageWeight']);
+
+    final estimatedLiveWeight = remainingBirds <= 0
+        ? 0.0
+        : remainingBirds.toDouble() * latestAverageWeight;
+
+    final fcr = estimatedLiveWeight <= 0
+        ? 0.0
+        : totalFeed / estimatedLiveWeight;
+
     final activeCycles = filteredCycles.where((cycle) {
       return (cycle['status'] ?? '').toString() == 'نشطة';
     }).length;
@@ -554,6 +608,14 @@ class _CycleIndicatorsScreenState extends State<CycleIndicatorsScreen> {
       0,
       (total, record) => total + _toDouble(record['amount']),
     );
+
+    final costPerBird = remainingBirds <= 0
+        ? 0.0
+        : totalExpenses / remainingBirds;
+
+    final costPerKilo = totalSoldWeight <= 0
+        ? 0.0
+        : totalExpenses / totalSoldWeight;
 
     double totalProfit = 0;
     double totalLoss = 0;
@@ -664,6 +726,12 @@ class _CycleIndicatorsScreenState extends State<CycleIndicatorsScreen> {
       'remainingBirds': remainingBirds,
       'mortalityRate': mortalityRate,
       'totalFeed': totalFeed,
+      'totalSoldWeight': totalSoldWeight,
+      'latestAverageWeight': latestAverageWeight,
+      'estimatedLiveWeight': estimatedLiveWeight,
+      'costPerBird': costPerBird,
+      'costPerKilo': costPerKilo,
+      'fcr': fcr,
       'totalSales': totalSales,
       'totalExpenses': totalExpenses,
       'totalProfit': totalProfit,
@@ -910,6 +978,46 @@ class _CycleIndicatorsScreenState extends State<CycleIndicatorsScreen> {
                         value: _formatNumber(data['totalFeed'] as num),
                         icon: Icons.inventory_2,
                         color: Colors.brown,
+                      ),
+                      _buildIndicatorCard(
+                        title: 'إجمالي الوزن المباع',
+                        value: _formatNumber(
+                          data['totalSoldWeight'] as num,
+                        ),
+                        icon: Icons.scale,
+                        color: Colors.teal,
+                      ),
+                      _buildIndicatorCard(
+                        title: 'آخر متوسط وزن',
+                        value: _formatNumber(
+                          data['latestAverageWeight'] as num,
+                        ),
+                        icon: Icons.monitor_weight,
+                        color: Colors.indigo,
+                      ),
+                      _buildIndicatorCard(
+                        title: 'تكلفة الطائر الواحد',
+                        value: _formatNumber(
+                          data['costPerBird'] as num,
+                        ),
+                        icon: Icons.calculate,
+                        color: Colors.purple,
+                      ),
+                      _buildIndicatorCard(
+                        title: 'تكلفة الكيلو',
+                        value: _formatNumber(
+                          data['costPerKilo'] as num,
+                        ),
+                        icon: Icons.price_change,
+                        color: Colors.deepPurple,
+                      ),
+                      _buildIndicatorCard(
+                        title: 'FCR معامل التحويل',
+                        value: _formatNumber(
+                          data['fcr'] as num,
+                        ),
+                        icon: Icons.speed,
+                        color: Colors.orange,
                       ),
                       _buildIndicatorCard(
                         title: 'إجمالي المبيعات',
