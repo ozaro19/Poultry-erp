@@ -6,6 +6,7 @@ import 'cycle_summary_report_screen.dart';
 import 'inventory_balances_report_screen.dart';
 import 'item_card_report_screen.dart';
 import 'trial_balance_screen.dart';
+import 'profit_loss_report_screen.dart';
 
 class ReportsCenterScreen extends StatelessWidget {
   const ReportsCenterScreen({super.key});
@@ -213,6 +214,14 @@ class ReportsCenterScreen extends StatelessWidget {
                     icon: Icons.account_balance,
                     color: Colors.blueGrey,
                     reports: [
+                      _buildReportCard(
+                        context: context,
+                        title: 'أرباح وخسائر عام',
+                        subtitle: 'إجمالي المبيعات والمصروفات وصافي الربح',
+                        icon: Icons.stacked_line_chart,
+                        color: Colors.red,
+                        screen: const ProfitLossReportScreen(),
+                      ),
                       _buildReportCard(
                         context: context,
                         title: 'ميزان المراجعة',
