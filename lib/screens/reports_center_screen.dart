@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'cycle_indicators_screen.dart';
 import 'cycle_summary_report_screen.dart';
 import 'inventory_balances_report_screen.dart';
+import 'account_ledger_screen.dart';
+import 'trial_balance_screen.dart';
 
 class ReportsCenterScreen extends StatelessWidget {
   const ReportsCenterScreen({super.key});
@@ -133,6 +135,22 @@ class ReportsCenterScreen extends StatelessWidget {
                         icon: Icons.inventory,
                         color: Colors.orange,
                         screen: const InventoryBalancesReportScreen(),
+                      ),
+                      _buildReportCard(
+                        context: context,
+                        title: 'ميزان المراجعة',
+                        subtitle: 'عرض أرصدة الحسابات مدينة ودائنة',
+                        icon: Icons.balance,
+                        color: Colors.blueGrey,
+                        screen: const TrialBalanceScreen(),
+                      ),
+                      _buildReportCard(
+                        context: context,
+                        title: 'كشف حساب',
+                        subtitle: 'متابعة حركة حساب معين بالتفصيل',
+                        icon: Icons.list_alt,
+                        color: Colors.teal,
+                        screen: const AccountLedgerScreen(),
                       ),
                     ],
                   ),
