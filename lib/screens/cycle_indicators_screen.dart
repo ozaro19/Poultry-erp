@@ -172,6 +172,27 @@ class _CycleIndicatorsScreenState extends State<CycleIndicatorsScreen> {
     final dateRange = _dateRangeLabel();
 
     final metrics = <Map<String, String>>[
+      
+      {
+        'title': 'إجمالي الكتاكيت',
+        'value': data['totalInitialChicks'].toString(),
+      },
+      {
+        'title': 'إجمالي النفوق',
+        'value': data['totalMortality'].toString(),
+      },
+      {
+        'title': 'نسبة النفوق',
+        'value': '${_formatNumber(data['mortalityRate'] as num)}%',
+      },
+      {
+        'title': 'الطيور المتبقية',
+        'value': data['remainingBirds'].toString(),
+      },
+      {
+        'title': 'إجمالي العلف المستهلك',
+        'value': _formatNumber(data['totalFeed'] as num),
+      },
       {
         'title': 'إجمالي الدورات',
         'value': data['totalCycles'].toString(),
@@ -407,6 +428,10 @@ class _CycleIndicatorsScreenState extends State<CycleIndicatorsScreen> {
         .collection('fattening_cycles')
         .get();
 
+    final followupsSnapshot = await FirebaseFirestore.instance
+        .collection('cycle_daily_followups')
+        .get();
+
     final expensesSnapshot = await FirebaseFirestore.instance
         .collection('cycle_expenses')
         .get();
@@ -431,7 +456,11 @@ class _CycleIndicatorsScreenState extends State<CycleIndicatorsScreen> {
         ...data,
       };
     }).toList();
-
+    
+    final followups = followupsSnapshot.docs.map((doc) {
+      return doc.data();
+    }).toList();
+    
     final expenses = expensesSnapshot.docs.map((doc) {
       return doc.data();
     }).toList();
@@ -479,6 +508,34 @@ class _CycleIndicatorsScreenState extends State<CycleIndicatorsScreen> {
       return filteredCycleIds.contains(cycleId) &&
           _recordMatchesDateRange(record);
     }).toList();
+
+    final filteredFollowups = followups.where((record) {
+      final cycleId = (record['cycleId'] ?? '').toString();
+
+      return filteredCycleIds.contains(cycleId) &&
+          _recordMatchesDateRange(record);
+    }).toList();
+
+    final totalInitialChicks = filteredCycles.fold<int>(
+      0,
+      (total, cycle) => total + _toDouble(cycle['chicksCount']).toInt(),
+    );
+
+    final totalMortality = filteredFollowups.fold<int>(
+      0,
+      (total, record) => total + _toDouble(record['mortality']).toInt(),
+    );
+
+    final totalFeed = filteredFollowups.fold<double>(
+      0,
+      (total, record) => total + _toDouble(record['feedQty']),
+    );
+
+    final remainingBirds = totalInitialChicks - totalMortality;
+
+    final mortalityRate = totalInitialChicks == 0
+        ? 0.0
+        : (totalMortality / totalInitialChicks) * 100;
 
     final activeCycles = filteredCycles.where((cycle) {
       return (cycle['status'] ?? '').toString() == 'نشطة';
@@ -602,6 +659,11 @@ class _CycleIndicatorsScreenState extends State<CycleIndicatorsScreen> {
       'totalCycles': filteredCycles.length,
       'activeCycles': activeCycles,
       'closedCycles': closedCycles,
+      'totalInitialChicks': totalInitialChicks,
+      'totalMortality': totalMortality,
+      'remainingBirds': remainingBirds,
+      'mortalityRate': mortalityRate,
+      'totalFeed': totalFeed,
       'totalSales': totalSales,
       'totalExpenses': totalExpenses,
       'totalProfit': totalProfit,
@@ -818,6 +880,36 @@ class _CycleIndicatorsScreenState extends State<CycleIndicatorsScreen> {
                         value: data['closedCycles'].toString(),
                         icon: Icons.lock,
                         color: Colors.grey,
+                      ),
+                      _buildIndicatorCard(
+                        title: 'إجمالي الكتاكيت',
+                        value: data['totalInitialChicks'].toString(),
+                        icon: Icons.groups,
+                        color: Colors.blue,
+                      ),
+                      _buildIndicatorCard(
+                        title: 'إجمالي النفوق',
+                        value: data['totalMortality'].toString(),
+                        icon: Icons.warning,
+                        color: Colors.red,
+                      ),
+                      _buildIndicatorCard(
+                        title: 'نسبة النفوق',
+                        value: '${_formatNumber(data['mortalityRate'] as num)}%',
+                        icon: Icons.percent,
+                        color: Colors.deepOrange,
+                      ),
+                      _buildIndicatorCard(
+                        title: 'الطيور المتبقية',
+                        value: data['remainingBirds'].toString(),
+                        icon: Icons.check_circle,
+                        color: Colors.green,
+                      ),
+                      _buildIndicatorCard(
+                        title: 'إجمالي العلف المستهلك',
+                        value: _formatNumber(data['totalFeed'] as num),
+                        icon: Icons.inventory_2,
+                        color: Colors.brown,
                       ),
                       _buildIndicatorCard(
                         title: 'إجمالي المبيعات',
