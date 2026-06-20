@@ -54,8 +54,17 @@ class DashboardScreen extends StatelessWidget {
         .collection('inventory_transactions')
         .get();
 
+    final followupsSnapshot = await FirebaseFirestore.instance
+        .collection('cycle_daily_followups')
+        .get();
+
     final cycles = cyclesSnapshot.docs.map((doc) {
-      return doc.data();
+      final data = doc.data();
+
+      return {
+        'id': doc.id,
+        ...data,
+      };
     }).toList();
 
     final sales = salesSnapshot.docs.map((doc) {
@@ -73,7 +82,12 @@ class DashboardScreen extends StatelessWidget {
     final transactions = transactionsSnapshot.docs.map((doc) {
       return doc.data();
     }).toList();
-        final activeCycles = cycles.where((cycle) {
+
+    final followups = followupsSnapshot.docs.map((doc) {
+      return doc.data();
+    }).toList();
+
+    final activeCycles = cycles.where((cycle) {
       return (cycle['status'] ?? '').toString() == 'نشطة';
     }).length;
 
@@ -146,14 +160,86 @@ class DashboardScreen extends StatelessWidget {
       }
     }
 
-    int alertsCount = 0;
+    int alertsCount = lowStockCount;
 
-    if (lowStockCount > 0) {
+    if (activeCycles == 0) {
       alertsCount++;
     }
 
-    if (netResult < 0) {
-      alertsCount++;
+    final salesByCycle = <String, double>{};
+    final expensesByCycle = <String, double>{};
+
+    for (final sale in sales) {
+      final cycleId = (sale['cycleId'] ?? '').toString();
+
+      if (cycleId.isEmpty) {
+        continue;
+      }
+
+      salesByCycle[cycleId] =
+          (salesByCycle[cycleId] ?? 0) + _toDouble(sale['totalAmount']);
+    }
+
+    for (final expense in expenses) {
+      final cycleId = (expense['cycleId'] ?? '').toString();
+
+      if (cycleId.isEmpty) {
+        continue;
+      }
+
+      expensesByCycle[cycleId] =
+          (expensesByCycle[cycleId] ?? 0) + _toDouble(expense['amount']);
+    }
+
+    for (final cycle in cycles) {
+      final cycleId = (cycle['id'] ?? '').toString();
+
+      if (cycleId.isEmpty) {
+        continue;
+      }
+
+      final cycleSales = salesByCycle[cycleId] ?? 0;
+      final cycleExpenses = expensesByCycle[cycleId] ?? 0;
+      final cycleNetResult = cycleSales - cycleExpenses;
+
+      if (cycleSales > 0 && cycleNetResult < 0) {
+        alertsCount++;
+      }
+    }
+
+    final mortalityByCycle = <String, int>{};
+
+    for (final followup in followups) {
+      final cycleId = (followup['cycleId'] ?? '').toString();
+
+      if (cycleId.isEmpty) {
+        continue;
+      }
+
+      mortalityByCycle[cycleId] =
+          (mortalityByCycle[cycleId] ?? 0) +
+              _toDouble(followup['mortality']).toInt();
+    }
+
+    for (final cycle in cycles) {
+      final cycleId = (cycle['id'] ?? '').toString();
+
+      if (cycleId.isEmpty) {
+        continue;
+      }
+
+      final initialChicks = _toDouble(cycle['chicksCount']).toInt();
+
+      if (initialChicks <= 0) {
+        continue;
+      }
+
+      final totalMortality = mortalityByCycle[cycleId] ?? 0;
+      final mortalityRate = (totalMortality / initialChicks) * 100;
+
+      if (mortalityRate >= 5) {
+        alertsCount++;
+      }
     }
 
     return {
@@ -268,6 +354,14 @@ class DashboardScreen extends StatelessWidget {
                         color: alertsCount > 0
                             ? Colors.red
                             : Colors.green,
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const AlertsCenterScreen(),
+                            ),
+                          );
+                        },
                       ),
                     ],
                   ),
@@ -455,17 +549,20 @@ class DashboardScreen extends StatelessWidget {
     );
   }
 }
+
 class _DashboardStatCard extends StatelessWidget {
   final String title;
   final String value;
   final IconData icon;
   final Color color;
+  final VoidCallback? onTap;
 
   const _DashboardStatCard({
     required this.title,
     required this.value,
     required this.icon,
     required this.color,
+    this.onTap,
   });
 
   @override
@@ -477,42 +574,46 @@ class _DashboardStatCard extends StatelessWidget {
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(14),
         ),
-        child: Padding(
-          padding: const EdgeInsets.all(14),
-          child: Row(
-            children: [
-              CircleAvatar(
-                backgroundColor: color.withAlpha(30),
-                child: Icon(
-                  icon,
-                  color: color,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(14),
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.all(14),
+            child: Row(
+              children: [
+                CircleAvatar(
+                  backgroundColor: color.withAlpha(30),
+                  child: Icon(
+                    icon,
+                    color: color,
+                  ),
                 ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      style: const TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.bold,
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      value,
-                      style: TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.bold,
-                        color: color,
+                      const SizedBox(height: 6),
+                      Text(
+                        value,
+                        style: TextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.bold,
+                          color: color,
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
