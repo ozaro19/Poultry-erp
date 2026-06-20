@@ -13,6 +13,7 @@ import 'cycle_indicators_screen.dart';
 import 'system_settings_screen.dart';
 import 'reports_center_screen.dart';
 import 'alerts_center_screen.dart';
+import 'assets_screen.dart';
 
 class DashboardScreen extends StatelessWidget {
   const DashboardScreen({super.key});
@@ -499,7 +500,14 @@ class DashboardScreen extends StatelessWidget {
                       _MenuCard(
                         'الأصول',
                         Icons.business,
-                        () {},
+                        () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const AssetsScreen(),
+                            ),
+                          );
+                        },
                       ),
                       _MenuCard(
                         'إعدادات النظام',
