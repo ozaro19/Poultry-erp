@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/services.dart';
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:printing/printing.dart';
 
 class CyclePerformanceComparisonScreen extends StatefulWidget {
   const CyclePerformanceComparisonScreen({super.key});
@@ -336,6 +340,259 @@ class _CyclePerformanceComparisonScreenState
     );
   }
 
+  Future<void> _printReport() async {
+    final data = await _loadReport();
+
+    final rows = (data['rows'] as List<dynamic>? ?? [])
+        .map((item) => item as Map<String, dynamic>)
+        .toList();
+
+    if (rows.isEmpty) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('لا توجد بيانات للطباعة'),
+        ),
+      );
+      return;
+    }
+
+    final bestProfitCycle =
+        data['bestProfitCycle'] as Map<String, dynamic>?;
+
+    final highestSalesCycle =
+        data['highestSalesCycle'] as Map<String, dynamic>?;
+
+    final highestExpensesCycle =
+        data['highestExpensesCycle'] as Map<String, dynamic>?;
+
+    final bestProfitValue = bestProfitCycle == null
+        ? '0'
+        : _formatNumber(_toDouble(bestProfitCycle['netResult']).abs());
+
+    final highestSalesValue = highestSalesCycle == null
+        ? '0'
+        : _formatNumber(_toDouble(highestSalesCycle['totalSales']));
+
+    final highestExpensesValue = highestExpensesCycle == null
+        ? '0'
+        : _formatNumber(_toDouble(highestExpensesCycle['totalExpenses']));
+
+    final settingsDocument = await FirebaseFirestore.instance
+        .collection('system_settings')
+        .doc('company')
+        .get();
+
+    final settingsData = settingsDocument.data();
+
+    final companyName =
+        (settingsData?['companyName'] ?? 'اسم الشركة تحت الإنشاء')
+            .toString();
+
+    final reportTitle =
+        (settingsData?['reportTitle'] ?? 'نظام إدارة مزارع الدواجن')
+            .toString();
+
+    final phone =
+        (settingsData?['phone'] ?? '').toString();
+
+    final address =
+        (settingsData?['address'] ?? '').toString();
+
+    final footerNote =
+        (settingsData?['footerNote'] ?? '').toString();
+
+    final logoData = await rootBundle.load(
+      'assets/images/poultry_logo.png',
+    );
+
+    final logoImage = pw.MemoryImage(
+      logoData.buffer.asUint8List(),
+    );
+
+    final regularFont = await PdfGoogleFonts.cairoRegular();
+    final boldFont = await PdfGoogleFonts.cairoBold();
+
+    final summaryRows = [
+      ['أفضل دورة ربحًا', '${_cycleTitle(bestProfitCycle)} - $bestProfitValue'],
+      ['أعلى دورة مبيعات', '${_cycleTitle(highestSalesCycle)} - $highestSalesValue'],
+      ['أعلى دورة مصروفات', '${_cycleTitle(highestExpensesCycle)} - $highestExpensesValue'],
+      ['عدد الدورات', rows.length.toString()],
+    ];
+
+    final comparisonRows = rows.map<List<String>>((row) {
+      final cycleCode = (row['cycleCode'] ?? '').toString();
+      final cycleName = (row['cycleName'] ?? '').toString();
+      final status = (row['status'] ?? '').toString();
+
+      final totalSales = _toDouble(row['totalSales']);
+      final totalExpenses = _toDouble(row['totalExpenses']);
+      final netResult = _toDouble(row['netResult']);
+
+      final resultTitle = netResult >= 0 ? 'ربح' : 'خسارة';
+
+      return [
+        '$cycleCode - $cycleName',
+        status,
+        _formatNumber(totalSales),
+        _formatNumber(totalExpenses),
+        '$resultTitle ${_formatNumber(netResult.abs())}',
+      ];
+    }).toList();
+
+    final pdf = pw.Document();
+
+    pdf.addPage(
+      pw.MultiPage(
+        pageFormat: PdfPageFormat.a4.landscape,
+        textDirection: pw.TextDirection.rtl,
+        theme: pw.ThemeData.withFont(
+          base: regularFont,
+          bold: boldFont,
+        ),
+        build: (context) {
+          return [
+            pw.Container(
+              width: double.infinity,
+              padding: const pw.EdgeInsets.all(12),
+              decoration: pw.BoxDecoration(
+                color: PdfColors.grey100,
+                border: pw.Border.all(
+                  color: PdfColors.grey600,
+                ),
+              ),
+              child: pw.Column(
+                crossAxisAlignment: pw.CrossAxisAlignment.center,
+                children: [
+                  pw.Image(
+                    logoImage,
+                    width: 60,
+                    height: 60,
+                  ),
+                  pw.SizedBox(height: 6),
+                  pw.Text(
+                    companyName,
+                    style: pw.TextStyle(
+                      fontSize: 13,
+                      fontWeight: pw.FontWeight.bold,
+                    ),
+                  ),
+                  if (phone.isNotEmpty) ...[
+                    pw.SizedBox(height: 3),
+                    pw.Text(
+                      'هاتف: $phone',
+                      style: const pw.TextStyle(
+                        fontSize: 9,
+                      ),
+                    ),
+                  ],
+                  if (address.isNotEmpty) ...[
+                    pw.SizedBox(height: 3),
+                    pw.Text(
+                      'العنوان: $address',
+                      style: const pw.TextStyle(
+                        fontSize: 9,
+                      ),
+                    ),
+                  ],
+                  pw.SizedBox(height: 8),
+                  pw.Text(
+                    reportTitle,
+                    style: pw.TextStyle(
+                      fontSize: 15,
+                      fontWeight: pw.FontWeight.bold,
+                    ),
+                  ),
+                  pw.SizedBox(height: 4),
+                  pw.Text(
+                    'تقرير مقارنة أداء الدورات',
+                    style: pw.TextStyle(
+                      fontSize: 20,
+                      fontWeight: pw.FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            pw.SizedBox(height: 16),
+            pw.Text(
+              'ملخص المقارنة',
+              style: pw.TextStyle(
+                fontSize: 15,
+                fontWeight: pw.FontWeight.bold,
+              ),
+            ),
+            pw.SizedBox(height: 8),
+            pw.TableHelper.fromTextArray(
+              headers: ['القيمة', 'المؤشر'],
+              data: summaryRows.map((row) => row.reversed.toList()).toList(),
+              border: pw.TableBorder.all(
+                color: PdfColors.grey600,
+              ),
+              headerDecoration: const pw.BoxDecoration(
+                color: PdfColors.grey300,
+              ),
+              headerStyle: pw.TextStyle(
+                fontWeight: pw.FontWeight.bold,
+              ),
+              cellAlignment: pw.Alignment.centerRight,
+              cellStyle: const pw.TextStyle(
+                fontSize: 10,
+              ),
+            ),
+            pw.SizedBox(height: 16),
+            pw.Text(
+              'جدول مقارنة الدورات',
+              style: pw.TextStyle(
+                fontSize: 15,
+                fontWeight: pw.FontWeight.bold,
+              ),
+            ),
+            pw.SizedBox(height: 8),
+            pw.TableHelper.fromTextArray(
+              headers: [
+                'النتيجة',
+                'المصروفات',
+                'المبيعات',
+                'الحالة',
+                'الدورة',
+              ],
+              data: comparisonRows.map((row) => row.reversed.toList()).toList(),
+              border: pw.TableBorder.all(
+                color: PdfColors.grey600,
+              ),
+              headerDecoration: const pw.BoxDecoration(
+                color: PdfColors.grey300,
+              ),
+              headerStyle: pw.TextStyle(
+                fontWeight: pw.FontWeight.bold,
+              ),
+              cellAlignment: pw.Alignment.centerRight,
+              cellStyle: const pw.TextStyle(
+                fontSize: 9,
+              ),
+            ),
+            if (footerNote.isNotEmpty) ...[
+              pw.SizedBox(height: 14),
+              pw.Text(
+                footerNote,
+                style: const pw.TextStyle(
+                  fontSize: 10,
+                  color: PdfColors.grey700,
+                ),
+              ),
+            ],
+          ];
+        },
+      ),
+    );
+
+    await Printing.layoutPdf(
+      onLayout: (format) async => pdf.save(),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Directionality(
@@ -344,6 +601,11 @@ class _CyclePerformanceComparisonScreenState
         appBar: AppBar(
           title: const Text('مقارنة أداء الدورات'),
           actions: [
+            IconButton(
+              tooltip: 'طباعة PDF',
+              icon: const Icon(Icons.picture_as_pdf),
+              onPressed: _printReport,
+            ),
             IconButton(
               tooltip: 'تحديث التقرير',
               icon: const Icon(Icons.refresh),
