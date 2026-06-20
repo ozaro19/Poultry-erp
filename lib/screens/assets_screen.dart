@@ -63,6 +63,117 @@ class _AssetsScreenState extends State<AssetsScreen> {
     }).toList();
   }
 
+  Future<void> _ensureAccount({
+    required String code,
+    required String nameAr,
+    required String accountType,
+  }) async {
+    final snapshot = await FirebaseFirestore.instance
+        .collection('chart_of_accounts')
+        .where('code', isEqualTo: code)
+        .limit(1)
+        .get();
+
+    if (snapshot.docs.isNotEmpty) {
+      return;
+    }
+
+    await FirebaseFirestore.instance.collection('chart_of_accounts').add({
+      'code': code,
+      'nameAr': nameAr,
+      'nameEn': '',
+      'type': accountType,
+      'parentCode': '',
+      'level': 0,
+      'createdAt': Timestamp.now(),
+    });
+  }
+
+  Future<void> _ensureAssetPurchaseAccounts() async {
+    await _ensureAccount(
+      code: '1600',
+      nameAr: 'الأصول الثابتة',
+      accountType: 'أصل',
+    );
+
+    await _ensureAccount(
+      code: '1100',
+      nameAr: 'الخزينة',
+      accountType: 'أصل',
+    );
+  }
+
+  Future<String> _generateEntryNumber() async {
+    final counterRef = FirebaseFirestore.instance
+        .collection('counters')
+        .doc('journal_entries');
+
+    final counterSnapshot = await counterRef.get();
+
+    int lastNumber = 0;
+
+    if (counterSnapshot.exists) {
+      final counterData = counterSnapshot.data();
+      lastNumber = _toInt(counterData?['lastNumber']);
+    }
+
+    final nextNumber = lastNumber + 1;
+
+    await counterRef.set(
+      {
+        'lastNumber': nextNumber,
+      },
+      SetOptions(merge: true),
+    );
+
+    return 'JE-${nextNumber.toString().padLeft(4, '0')}';
+  }
+
+  Future<String?> _createAssetPurchaseJournalEntry({
+    required String assetId,
+    required String assetCode,
+    required String assetName,
+    required double purchaseCost,
+    required DateTime purchaseDate,
+  }) async {
+    if (purchaseCost <= 0) {
+      return null;
+    }
+
+    await _ensureAssetPurchaseAccounts();
+
+    final entryNo = await _generateEntryNumber();
+
+    final journalEntryRef =
+        await FirebaseFirestore.instance.collection('journal_entries').add({
+      'entryNo': entryNo,
+      'date': Timestamp.fromDate(purchaseDate),
+      'description': 'شراء أصل ثابت: $assetName - $assetCode',
+      'lines': [
+        {
+          'accountCode': '1600',
+          'accountName': 'الأصول الثابتة',
+          'debit': purchaseCost,
+          'credit': 0,
+        },
+        {
+          'accountCode': '1100',
+          'accountName': 'الخزينة',
+          'debit': 0,
+          'credit': purchaseCost,
+        },
+      ],
+      'totalDebit': purchaseCost,
+      'totalCredit': purchaseCost,
+      'isBalanced': true,
+      'source': 'asset_purchase',
+      'assetId': assetId,
+      'createdAt': Timestamp.now(),
+    });
+
+    return journalEntryRef.id;
+  }
+
   void _refreshAssets() {
     setState(() {
       assetsFuture = _loadAssets();
@@ -304,9 +415,27 @@ class _AssetsScreenState extends State<AssetsScreen> {
                     if (assetId == null) {
                       data['createdAt'] = Timestamp.now();
 
-                      await FirebaseFirestore.instance
+                      final assetRef = await FirebaseFirestore.instance
                           .collection('assets')
                           .add(data);
+
+                      final journalEntryId =
+                          await _createAssetPurchaseJournalEntry(
+                        assetId: assetRef.id,
+                        assetCode: code,
+                        assetName: name,
+                        purchaseCost: purchaseCost,
+                        purchaseDate: purchaseDate!,
+                      );
+
+                      if (journalEntryId != null) {
+                        await assetRef.set(
+                          {
+                            'purchaseJournalEntryId': journalEntryId,
+                          },
+                          SetOptions(merge: true),
+                        );
+                      }
                     } else {
                       await FirebaseFirestore.instance
                           .collection('assets')
