@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'cycle_performance_comparison_screen.dart';
+import 'cycle_summary_report_screen.dart';
+import 'fattening_cycles_screen.dart';
+import 'inventory_balances_report_screen.dart';
 
 class AlertsCenterScreen extends StatefulWidget {
   const AlertsCenterScreen({super.key});
@@ -285,6 +289,33 @@ class _AlertsCenterScreenState extends State<AlertsCenterScreen> {
     });
   }
 
+    void _openAlertScreen(Map<String, dynamic> alert) {
+    final title = (alert['title'] ?? '').toString();
+
+    Widget? screen;
+
+    if (title == 'مخزون منخفض') {
+      screen = const InventoryBalancesReportScreen();
+    } else if (title == 'دورة خاسرة') {
+      screen = const CyclePerformanceComparisonScreen();
+    } else if (title == 'نسبة نفوق مرتفعة') {
+      screen = const CycleSummaryReportScreen();
+    } else if (title == 'لا توجد دورات نشطة') {
+      screen = const FatteningCyclesScreen();
+    }
+
+    if (screen == null) {
+      return;
+    }
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => screen!,
+      ),
+    );
+  }
+
   Widget _buildAlertCard(Map<String, dynamic> alert) {
     final severity = (alert['severity'] ?? '').toString();
     final color = _severityColor(severity);
@@ -293,6 +324,7 @@ class _AlertsCenterScreenState extends State<AlertsCenterScreen> {
     return Card(
       elevation: 3,
       child: ListTile(
+        onTap: () => _openAlertScreen(alert),
         leading: CircleAvatar(
           backgroundColor: color.withAlpha(30),
           child: Icon(
@@ -329,6 +361,11 @@ class _AlertsCenterScreenState extends State<AlertsCenterScreen> {
               ),
             ),
           ],
+        ),
+        trailing: IconButton(
+          tooltip: 'فتح الشاشة المرتبطة',
+          icon: const Icon(Icons.open_in_new),
+          onPressed: () => _openAlertScreen(alert),
         ),
         subtitle: Padding(
           padding: const EdgeInsets.only(top: 8),
