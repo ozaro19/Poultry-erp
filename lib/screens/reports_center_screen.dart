@@ -9,6 +9,7 @@ import 'trial_balance_screen.dart';
 import 'profit_loss_report_screen.dart';
 import 'cycle_performance_comparison_screen.dart';
 import 'assets_report_screen.dart';
+import 'asset_depreciation_entry_screen.dart';
 
 class ReportsCenterScreen extends StatelessWidget {
   const ReportsCenterScreen({super.key});
@@ -250,7 +251,7 @@ class ReportsCenterScreen extends StatelessWidget {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 28),
+                const SizedBox(height: 28),
                   _buildReportSection(
                     title: 'تقارير الأصول',
                     icon: Icons.business,
@@ -263,6 +264,14 @@ class ReportsCenterScreen extends StatelessWidget {
                         icon: Icons.account_balance,
                         color: Colors.brown,
                         screen: const AssetsReportScreen(),
+                      ),
+                      _buildReportCard(
+                        context: context,
+                        title: 'ترحيل قيد إهلاك الأصول',
+                        subtitle: 'إنشاء قيد يومية تلقائي للإهلاك الشهري',
+                        icon: Icons.post_add,
+                        color: Colors.deepOrange,
+                        screen: const AssetDepreciationEntryScreen(),
                       ),
                     ],
                   ),
