@@ -10,6 +10,7 @@ import 'profit_loss_report_screen.dart';
 import 'cycle_performance_comparison_screen.dart';
 import 'assets_report_screen.dart';
 import 'asset_depreciation_entry_screen.dart';
+import 'capital_report_screen.dart';
 
 class ReportsCenterScreen extends StatelessWidget {
   const ReportsCenterScreen({super.key});
@@ -272,6 +273,22 @@ class ReportsCenterScreen extends StatelessWidget {
                         icon: Icons.post_add,
                         color: Colors.deepOrange,
                         screen: const AssetDepreciationEntryScreen(),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 28),
+                  _buildReportSection(
+                    title: 'تقارير رأس المال',
+                    icon: Icons.account_balance_wallet,
+                    color: Colors.indigo,
+                    reports: [
+                      _buildReportCard(
+                        context: context,
+                        title: 'تقرير رأس المال',
+                        subtitle: 'زيادات وسحوبات وصافي رأس المال',
+                        icon: Icons.account_balance,
+                        color: Colors.indigo,
+                        screen: const CapitalReportScreen(),
                       ),
                     ],
                   ),
