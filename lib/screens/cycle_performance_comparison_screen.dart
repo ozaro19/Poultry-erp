@@ -1,5 +1,8 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:file_saver/file_saver.dart';
 import 'package:flutter/services.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
@@ -464,6 +467,144 @@ class _CyclePerformanceComparisonScreenState
     );
   }
 
+  String _csvValue(dynamic value) {
+    final text = value.toString().replaceAll('"', '""');
+
+    return '"$text"';
+  }
+
+  Future<void> _exportCsvReport() async {
+    final data = await _loadReport();
+
+    final rows = (data['rows'] as List<dynamic>? ?? [])
+        .map((item) => item as Map<String, dynamic>)
+        .toList();
+
+    if (rows.isEmpty) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('لا توجد بيانات للتصدير'),
+        ),
+      );
+      return;
+    }
+
+    final bestProfitCycle =
+        data['bestProfitCycle'] as Map<String, dynamic>?;
+
+    final highestSalesCycle =
+        data['highestSalesCycle'] as Map<String, dynamic>?;
+
+    final highestExpensesCycle =
+        data['highestExpensesCycle'] as Map<String, dynamic>?;
+
+    final bestProfitValue = bestProfitCycle == null
+        ? '0'
+        : _formatNumber(_toDouble(bestProfitCycle['netResult']).abs());
+
+    final highestSalesValue = highestSalesCycle == null
+        ? '0'
+        : _formatNumber(_toDouble(highestSalesCycle['totalSales']));
+
+    final highestExpensesValue = highestExpensesCycle == null
+        ? '0'
+        : _formatNumber(_toDouble(highestExpensesCycle['totalExpenses']));
+
+    final buffer = StringBuffer('\uFEFF');
+
+    buffer.writeln(
+      [_csvValue('تقرير مقارنة أداء الدورات')].join(','),
+    );
+
+    buffer.writeln(
+      [_csvValue('الفترة من'), _csvValue(_formatDate(fromDate))].join(','),
+    );
+
+    buffer.writeln(
+      [_csvValue('الفترة إلى'), _csvValue(_formatDate(toDate))].join(','),
+    );
+
+    buffer.writeln(
+      [
+        _csvValue('أفضل دورة ربحًا'),
+        _csvValue('${_cycleTitle(bestProfitCycle)} - $bestProfitValue'),
+      ].join(','),
+    );
+
+    buffer.writeln(
+      [
+        _csvValue('أعلى دورة مبيعات'),
+        _csvValue('${_cycleTitle(highestSalesCycle)} - $highestSalesValue'),
+      ].join(','),
+    );
+
+    buffer.writeln(
+      [
+        _csvValue('أعلى دورة مصروفات'),
+        _csvValue('${_cycleTitle(highestExpensesCycle)} - $highestExpensesValue'),
+      ].join(','),
+    );
+
+    buffer.writeln(
+      [_csvValue('عدد الدورات'), _csvValue(rows.length)].join(','),
+    );
+
+    buffer.writeln('');
+
+    buffer.writeln(
+      [
+        'الدورة',
+        'الحالة',
+        'إجمالي المبيعات',
+        'إجمالي المصروفات',
+        'النتيجة',
+      ].map(_csvValue).join(','),
+    );
+
+    for (final row in rows) {
+      final cycleCode = (row['cycleCode'] ?? '').toString();
+      final cycleName = (row['cycleName'] ?? '').toString();
+      final status = (row['status'] ?? '').toString();
+
+      final totalSales = _toDouble(row['totalSales']);
+      final totalExpenses = _toDouble(row['totalExpenses']);
+      final netResult = _toDouble(row['netResult']);
+
+      final resultTitle = netResult >= 0 ? 'ربح' : 'خسارة';
+
+      buffer.writeln(
+        [
+          '$cycleCode - $cycleName',
+          status,
+          _formatNumber(totalSales),
+          _formatNumber(totalExpenses),
+          '$resultTitle ${_formatNumber(netResult.abs())}',
+        ].map(_csvValue).join(','),
+      );
+    }
+
+    final bytes = Uint8List.fromList(
+      utf8.encode(buffer.toString()),
+    );
+
+    await FileSaver.instance.saveFile(
+      name: 'cycle_performance_comparison',
+      bytes: bytes,
+      fileExtension: 'csv',
+      mimeType: MimeType.other,
+    );
+
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('تم تصدير مقارنة أداء الدورات CSV بنجاح'),
+      ),
+    );
+  }
+
   Future<void> _printReport() async {
     final data = await _loadReport();
 
@@ -727,6 +868,11 @@ class _CyclePerformanceComparisonScreenState
         appBar: AppBar(
           title: const Text('مقارنة أداء الدورات'),
           actions: [
+            IconButton(
+              tooltip: 'تصدير CSV',
+              icon: const Icon(Icons.table_chart),
+              onPressed: _exportCsvReport,
+            ),
             IconButton(
               tooltip: 'طباعة PDF',
               icon: const Icon(Icons.picture_as_pdf),
