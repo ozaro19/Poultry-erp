@@ -174,6 +174,53 @@ class _AssetsScreenState extends State<AssetsScreen> {
     return journalEntryRef.id;
   }
 
+  Future<void> _updateAssetPurchaseJournalEntry({
+    required String journalEntryId,
+    required String assetCode,
+    required String assetName,
+    required double purchaseCost,
+    required DateTime purchaseDate,
+  }) async {
+    if (journalEntryId.trim().isEmpty || purchaseCost <= 0) {
+      return;
+    }
+
+    await _ensureAssetPurchaseAccounts();
+
+    final journalEntryRef = FirebaseFirestore.instance
+        .collection('journal_entries')
+        .doc(journalEntryId);
+
+    final journalEntrySnapshot = await journalEntryRef.get();
+
+    if (!journalEntrySnapshot.exists) {
+      return;
+    }
+
+    await journalEntryRef.update({
+      'date': Timestamp.fromDate(purchaseDate),
+      'description': 'شراء أصل ثابت: $assetName - $assetCode',
+      'lines': [
+        {
+          'accountCode': '1600',
+          'accountName': 'الأصول الثابتة',
+          'debit': purchaseCost,
+          'credit': 0,
+        },
+        {
+          'accountCode': '1100',
+          'accountName': 'الخزينة',
+          'debit': 0,
+          'credit': purchaseCost,
+        },
+      ],
+      'totalDebit': purchaseCost,
+      'totalCredit': purchaseCost,
+      'isBalanced': true,
+      'updatedAt': Timestamp.now(),
+    });
+  }
+
   void _refreshAssets() {
     setState(() {
       assetsFuture = _loadAssets();
@@ -441,6 +488,19 @@ class _AssetsScreenState extends State<AssetsScreen> {
                           .collection('assets')
                           .doc(assetId)
                           .update(data);
+
+                      final purchaseJournalEntryId =
+                          (asset?['purchaseJournalEntryId'] ?? '').toString();
+
+                      if (purchaseJournalEntryId.isNotEmpty) {
+                        await _updateAssetPurchaseJournalEntry(
+                          journalEntryId: purchaseJournalEntryId,
+                          assetCode: code,
+                          assetName: name,
+                          purchaseCost: purchaseCost,
+                          purchaseDate: purchaseDate!,
+                        );
+                      }
                     }
 
                     if (!dialogContext.mounted) return;
