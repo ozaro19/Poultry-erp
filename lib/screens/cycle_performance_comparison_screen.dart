@@ -16,6 +16,8 @@ class CyclePerformanceComparisonScreen extends StatefulWidget {
 class _CyclePerformanceComparisonScreenState
     extends State<CyclePerformanceComparisonScreen> {
   late Future<Map<String, dynamic>> reportFuture;
+  DateTime? fromDate;
+  DateTime? toDate;
 
   @override
   void initState() {
@@ -38,7 +40,53 @@ class _CyclePerformanceComparisonScreenState
 
     return value.toStringAsFixed(2);
   }
+  String _formatDate(DateTime? date) {
+    if (date == null) return 'غير محدد';
 
+    return '${date.year}-${date.month}-${date.day}';
+  }
+
+  bool _isWithinDateRange(Timestamp? timestamp) {
+    if (fromDate == null && toDate == null) {
+      return true;
+    }
+
+    if (timestamp == null) {
+      return false;
+    }
+
+    final date = timestamp.toDate();
+
+    if (fromDate != null) {
+      final start = DateTime(
+        fromDate!.year,
+        fromDate!.month,
+        fromDate!.day,
+      );
+
+      if (date.isBefore(start)) {
+        return false;
+      }
+    }
+
+    if (toDate != null) {
+      final end = DateTime(
+        toDate!.year,
+        toDate!.month,
+        toDate!.day,
+        23,
+        59,
+        59,
+      );
+
+      if (date.isAfter(end)) {
+        return false;
+      }
+    }
+
+    return true;
+  }
+  
   Future<Map<String, dynamic>> _loadReport() async {
     final cyclesSnapshot = await FirebaseFirestore.instance
         .collection('fattening_cycles')
@@ -58,6 +106,10 @@ class _CyclePerformanceComparisonScreenState
     for (final doc in salesSnapshot.docs) {
       final data = doc.data();
 
+      if (!_isWithinDateRange(data['date'] as Timestamp?)) {
+        continue;
+      }
+
       final cycleId = (data['cycleId'] ?? '').toString();
 
       if (cycleId.isEmpty) {
@@ -71,6 +123,10 @@ class _CyclePerformanceComparisonScreenState
 
     for (final doc in expensesSnapshot.docs) {
       final data = doc.data();
+
+      if (!_isWithinDateRange(data['date'] as Timestamp?)) {
+        continue;
+      }
 
       final cycleId = (data['cycleId'] ?? '').toString();
 
@@ -145,6 +201,74 @@ class _CyclePerformanceComparisonScreenState
     setState(() {
       reportFuture = _loadReport();
     });
+  }
+
+  Future<void> _pickFromDate() async {
+    final selectedDate = await showDatePicker(
+      context: context,
+      initialDate: fromDate ?? DateTime.now(),
+      firstDate: DateTime(2020),
+      lastDate: DateTime(2100),
+    );
+
+    if (selectedDate == null) return;
+
+    setState(() {
+      fromDate = selectedDate;
+      reportFuture = _loadReport();
+    });
+  }
+
+  Future<void> _pickToDate() async {
+    final selectedDate = await showDatePicker(
+      context: context,
+      initialDate: toDate ?? DateTime.now(),
+      firstDate: DateTime(2020),
+      lastDate: DateTime(2100),
+    );
+
+    if (selectedDate == null) return;
+
+    setState(() {
+      toDate = selectedDate;
+      reportFuture = _loadReport();
+    });
+  }
+
+  void _clearDateFilter() {
+    setState(() {
+      fromDate = null;
+      toDate = null;
+      reportFuture = _loadReport();
+    });
+  }
+
+  Widget _buildDateButton({
+    required String title,
+    required String value,
+    required IconData icon,
+    required VoidCallback onTap,
+  }) {
+    return SizedBox(
+      width: 260,
+      child: OutlinedButton.icon(
+        onPressed: onTap,
+        icon: Icon(icon),
+        label: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(title),
+            const SizedBox(height: 3),
+            Text(
+              value,
+              style: const TextStyle(
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   String _cycleTitle(Map<String, dynamic>? cycle) {
@@ -415,6 +539,8 @@ class _CyclePerformanceComparisonScreenState
     final boldFont = await PdfGoogleFonts.cairoBold();
 
     final summaryRows = [
+      ['الفترة من', _formatDate(fromDate)],
+      ['الفترة إلى', _formatDate(toDate)],
       ['أفضل دورة ربحًا', '${_cycleTitle(bestProfitCycle)} - $bestProfitValue'],
       ['أعلى دورة مبيعات', '${_cycleTitle(highestSalesCycle)} - $highestSalesValue'],
       ['أعلى دورة مصروفات', '${_cycleTitle(highestExpensesCycle)} - $highestExpensesValue'],
@@ -635,6 +761,33 @@ class _CyclePerformanceComparisonScreenState
                       color: Colors.grey.shade700,
                       fontSize: 15,
                     ),
+                  ),
+                  const SizedBox(height: 20),
+                  Wrap(
+                    spacing: 12,
+                    runSpacing: 12,
+                    children: [
+                      _buildDateButton(
+                        title: 'من تاريخ',
+                        value: _formatDate(fromDate),
+                        icon: Icons.date_range,
+                        onTap: _pickFromDate,
+                      ),
+                      _buildDateButton(
+                        title: 'إلى تاريخ',
+                        value: _formatDate(toDate),
+                        icon: Icons.event,
+                        onTap: _pickToDate,
+                      ),
+                      SizedBox(
+                        width: 180,
+                        child: OutlinedButton.icon(
+                          onPressed: _clearDateFilter,
+                          icon: const Icon(Icons.clear),
+                          label: const Text('مسح الفلتر'),
+                        ),
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 24),
                   FutureBuilder<Map<String, dynamic>>(
