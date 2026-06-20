@@ -12,6 +12,7 @@ import 'fattening_cycles_screen.dart';
 import 'cycle_indicators_screen.dart';
 import 'system_settings_screen.dart';
 import 'reports_center_screen.dart';
+import 'alerts_center_screen.dart';
 
 class DashboardScreen extends StatelessWidget {
   const DashboardScreen({super.key});
@@ -427,6 +428,18 @@ class DashboardScreen extends StatelessWidget {
                             context,
                             MaterialPageRoute(
                               builder: (_) => const ReportsCenterScreen(),
+                            ),
+                          );
+                        },
+                      ),
+                      _MenuCard(
+                        'التنبيهات الذكية',
+                        Icons.notifications_active,
+                        () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const AlertsCenterScreen(),
                             ),
                           );
                         },
