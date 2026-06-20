@@ -8,6 +8,7 @@ import 'item_card_report_screen.dart';
 import 'trial_balance_screen.dart';
 import 'profit_loss_report_screen.dart';
 import 'cycle_performance_comparison_screen.dart';
+import 'assets_report_screen.dart';
 
 class ReportsCenterScreen extends StatelessWidget {
   const ReportsCenterScreen({super.key});
@@ -246,6 +247,22 @@ class ReportsCenterScreen extends StatelessWidget {
                         icon: Icons.list_alt,
                         color: Colors.teal,
                         screen: const AccountLedgerScreen(),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 28),
+                  _buildReportSection(
+                    title: 'تقارير الأصول',
+                    icon: Icons.business,
+                    color: Colors.brown,
+                    reports: [
+                      _buildReportCard(
+                        context: context,
+                        title: 'تقرير الأصول والإهلاك',
+                        subtitle: 'تكلفة الأصول والإهلاك والقيمة الدفترية',
+                        icon: Icons.account_balance,
+                        color: Colors.brown,
+                        screen: const AssetsReportScreen(),
                       ),
                     ],
                   ),
