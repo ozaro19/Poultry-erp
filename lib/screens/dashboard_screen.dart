@@ -14,6 +14,7 @@ import 'system_settings_screen.dart';
 import 'reports_center_screen.dart';
 import 'alerts_center_screen.dart';
 import 'assets_screen.dart';
+import 'capital_screen.dart';
 
 class DashboardScreen extends StatelessWidget {
   const DashboardScreen({super.key});
@@ -445,8 +446,15 @@ class DashboardScreen extends StatelessWidget {
                       ),
                       _MenuCard(
                         'رأس المال',
-                        Icons.savings,
-                        () {},
+                        Icons.account_balance,
+                        () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const CapitalScreen(),
+                            ),
+                          );
+                        },
                       ),
                       _MenuCard(
                         'المخازن',
