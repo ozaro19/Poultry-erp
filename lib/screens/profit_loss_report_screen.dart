@@ -1,5 +1,7 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:file_saver/file_saver.dart';
 import 'package:flutter/services.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
@@ -479,6 +481,121 @@ class _ProfitLossReportScreenState extends State<ProfitLossReportScreen> {
     );
   }
 
+  String _csvValue(dynamic value) {
+    final text = value.toString().replaceAll('"', '""');
+
+    return '"$text"';
+  }
+
+  Future<void> _exportCsvReport() async {
+    final data = await _loadReport();
+
+    final totalSales = _toDouble(data['totalSales']);
+    final totalExpenses = _toDouble(data['totalExpenses']);
+    final netResult = _toDouble(data['netResult']);
+
+    final salesCount = data['salesCount'] ?? 0;
+    final expensesCount = data['expensesCount'] ?? 0;
+    final cyclesCount = data['cyclesCount'] ?? 0;
+
+    final cycleDetails = (data['cycleDetails'] as List<dynamic>? ?? [])
+        .map((item) => item as Map<String, dynamic>)
+        .toList();
+
+    final netResultTitle = netResult >= 0 ? 'صافي ربح' : 'صافي خسارة';
+
+    final buffer = StringBuffer('\uFEFF');
+
+    buffer.writeln(
+      [_csvValue('تقرير أرباح وخسائر عام')].join(','),
+    );
+
+    buffer.writeln(
+      [_csvValue('الفترة من'), _csvValue(_formatDate(fromDate))].join(','),
+    );
+
+    buffer.writeln(
+      [_csvValue('الفترة إلى'), _csvValue(_formatDate(toDate))].join(','),
+    );
+
+    buffer.writeln(
+      [_csvValue('إجمالي المبيعات'), _csvValue(_formatNumber(totalSales))]
+          .join(','),
+    );
+
+    buffer.writeln(
+      [_csvValue('إجمالي المصروفات'), _csvValue(_formatNumber(totalExpenses))]
+          .join(','),
+    );
+
+    buffer.writeln(
+      [_csvValue(netResultTitle), _csvValue(_formatNumber(netResult.abs()))]
+          .join(','),
+    );
+
+    buffer.writeln(
+      [_csvValue('عدد عمليات البيع'), _csvValue(salesCount)].join(','),
+    );
+
+    buffer.writeln(
+      [_csvValue('عدد بنود المصروفات'), _csvValue(expensesCount)].join(','),
+    );
+
+    buffer.writeln(
+      [_csvValue('عدد الدورات المرتبطة'), _csvValue(cyclesCount)].join(','),
+    );
+
+    buffer.writeln('');
+
+    buffer.writeln(
+      [
+        'الدورة',
+        'إجمالي المبيعات',
+        'إجمالي المصروفات',
+        'النتيجة',
+      ].map(_csvValue).join(','),
+    );
+
+    for (final cycle in cycleDetails) {
+      final cycleCode = (cycle['cycleCode'] ?? '').toString();
+      final cycleName = (cycle['cycleName'] ?? '').toString();
+
+      final cycleSales = _toDouble(cycle['totalSales']);
+      final cycleExpenses = _toDouble(cycle['totalExpenses']);
+      final cycleNetResult = _toDouble(cycle['netResult']);
+
+      final cycleResultTitle = cycleNetResult >= 0 ? 'ربح' : 'خسارة';
+
+      buffer.writeln(
+        [
+          '$cycleCode - $cycleName',
+          _formatNumber(cycleSales),
+          _formatNumber(cycleExpenses),
+          '$cycleResultTitle ${_formatNumber(cycleNetResult.abs())}',
+        ].map(_csvValue).join(','),
+      );
+    }
+
+    final bytes = Uint8List.fromList(
+      utf8.encode(buffer.toString()),
+    );
+
+    await FileSaver.instance.saveFile(
+      name: 'profit_loss_report',
+      bytes: bytes,
+      fileExtension: 'csv',
+      mimeType: MimeType.other,
+    );
+
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('تم تصدير تقرير الأرباح والخسائر CSV بنجاح'),
+      ),
+    );
+  }
+
   Future<void> _printReport() async {
     final data = await _loadReport();
 
@@ -738,6 +855,11 @@ class _ProfitLossReportScreenState extends State<ProfitLossReportScreen> {
         appBar: AppBar(
           title: const Text('تقرير أرباح وخسائر عام'),
           actions: [
+            IconButton(
+              tooltip: 'تصدير CSV',
+              icon: const Icon(Icons.table_chart),
+              onPressed: _exportCsvReport,
+            ),
             IconButton(
               tooltip: 'طباعة PDF',
               icon: const Icon(Icons.picture_as_pdf),
