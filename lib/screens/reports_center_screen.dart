@@ -7,6 +7,7 @@ import 'inventory_balances_report_screen.dart';
 import 'item_card_report_screen.dart';
 import 'trial_balance_screen.dart';
 import 'profit_loss_report_screen.dart';
+import 'cycle_performance_comparison_screen.dart';
 
 class ReportsCenterScreen extends StatelessWidget {
   const ReportsCenterScreen({super.key});
@@ -181,6 +182,14 @@ class ReportsCenterScreen extends StatelessWidget {
                         icon: Icons.summarize,
                         color: Colors.green,
                         screen: const CycleSummaryReportScreen(),
+                      ),
+                      _buildReportCard(
+                        context: context,
+                        title: 'مقارنة أداء الدورات',
+                        subtitle: 'أفضل دورة ربحًا وأعلى مبيعات ومصروفات',
+                        icon: Icons.compare_arrows,
+                        color: Colors.deepOrange,
+                        screen: const CyclePerformanceComparisonScreen(),
                       ),
                     ],
                   ),
