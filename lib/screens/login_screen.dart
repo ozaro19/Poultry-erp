@@ -283,6 +283,113 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
+  Future<void> _createInvitedUserAccount() async {
+    final email = emailController.text.trim();
+    final password = passwordController.text.trim();
+
+    if (email.isEmpty || password.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('يرجى إدخال البريد الإلكتروني وكلمة المرور'),
+        ),
+      );
+      return;
+    }
+
+    if (password.length < 6) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('كلمة المرور يجب ألا تقل عن 6 أحرف'),
+        ),
+      );
+      return;
+    }
+
+    setState(() {
+      isLoading = true;
+    });
+
+    try {
+      final pendingSnapshot = await FirebaseFirestore.instance
+          .collection('users')
+          .where('email', isEqualTo: email)
+          .limit(1)
+          .get();
+
+      if (pendingSnapshot.docs.isEmpty) {
+        if (!mounted) return;
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'هذا البريد غير موجود في دعوات المستخدمين',
+            ),
+          ),
+        );
+        return;
+      }
+
+      final pendingUserData = pendingSnapshot.docs.first.data();
+      final pendingStatus =
+          (pendingUserData['status'] ?? '').toString();
+
+      if (pendingStatus != 'pending') {
+        if (!mounted) return;
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'هذا البريد مسجل بالفعل أو غير متاح كدعوة جديدة',
+            ),
+          ),
+        );
+        return;
+      }
+
+      final invitedRole =
+          (pendingUserData['role'] ?? 'viewer').toString();
+
+      final credential =
+          await FirebaseAuth.instance.createUserWithEmailAndPassword(
+        email: email,
+        password: password,
+      );
+
+      final user = credential.user;
+
+      if (user == null) {
+        throw Exception('لم يتم إنشاء المستخدم');
+      }
+
+      await _saveUserDocument(
+        user: user,
+        defaultRole: invitedRole,
+      );
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('تم إنشاء حساب المستخدم بنجاح'),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(_friendlyErrorMessage(error)),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          isLoading = false;
+        });
+      }
+    }
+  }
+
   Widget _buildLogo() {
     return Column(
       children: [
@@ -366,6 +473,17 @@ class _LoginScreenState extends State<LoginScreen> {
                 label: Text(isLoading ? 'جاري الدخول...' : 'تسجيل الدخول'),
               ),
             ),
+
+            const SizedBox(height: 10),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: isLoading ? null : _createInvitedUserAccount,
+                icon: const Icon(Icons.person_add_alt),
+                label: const Text('إنشاء حساب مستخدم بدعوة'),
+              ),
+            ),
+
             const SizedBox(height: 10),
             SizedBox(
               width: double.infinity,
