@@ -324,6 +324,21 @@ class DashboardScreen extends StatelessWidget {
                 (data['currentRole'] ?? 'viewer').toString();
 
             final isAdmin = currentRole == 'admin';
+            final isAccountant = currentRole == 'accountant';
+            final isFarmManager = currentRole == 'farm_manager';
+
+            final canViewAccounting = isAdmin || isAccountant;
+            final canViewInventory =
+                isAdmin || isAccountant || isFarmManager;
+            final canViewFarm = isAdmin || isFarmManager;
+            final canViewReports = [
+              'admin',
+              'accountant',
+              'farm_manager',
+              'viewer',
+            ].contains(currentRole);
+            final canViewAlerts =
+                isAdmin || isAccountant || isFarmManager;
 
             return SingleChildScrollView(
               padding: const EdgeInsets.all(16),
@@ -415,6 +430,7 @@ class DashboardScreen extends StatelessWidget {
                     mainAxisSpacing: 12,
                     childAspectRatio: 1.25,
                     children: [
+                    if (canViewAccounting)
                       _MenuCard(
                         'شجرة الحسابات',
                         Icons.account_tree,
@@ -427,6 +443,7 @@ class DashboardScreen extends StatelessWidget {
                           );
                         },
                       ),
+                    if (canViewAccounting)
                       _MenuCard(
                         'الخزينة',
                         Icons.account_balance_wallet,
@@ -439,6 +456,7 @@ class DashboardScreen extends StatelessWidget {
                           );
                         },
                       ),
+                    if (canViewAccounting)
                       _MenuCard(
                         'القيود اليومية',
                         Icons.receipt_long,
@@ -446,11 +464,13 @@ class DashboardScreen extends StatelessWidget {
                           Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (_) => const JournalEntriesScreen(),
+                              builder: (_) =>
+                                  const JournalEntriesScreen(),
                             ),
                           );
                         },
                       ),
+                    if (canViewAccounting)
                       _MenuCard(
                         'كشف حساب',
                         Icons.list_alt,
@@ -458,11 +478,13 @@ class DashboardScreen extends StatelessWidget {
                           Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (_) => const AccountLedgerScreen(),
+                              builder: (_) =>
+                                  const AccountLedgerScreen(),
                             ),
                           );
                         },
                       ),
+                    if (canViewAccounting)
                       _MenuCard(
                         'ميزان المراجعة',
                         Icons.balance,
@@ -470,11 +492,13 @@ class DashboardScreen extends StatelessWidget {
                           Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (_) => const TrialBalanceScreen(),
+                              builder: (_) =>
+                                  const TrialBalanceScreen(),
                             ),
                           );
                         },
                       ),
+                    if (canViewAccounting)
                       _MenuCard(
                         'رأس المال',
                         Icons.account_balance,
@@ -487,6 +511,7 @@ class DashboardScreen extends StatelessWidget {
                           );
                         },
                       ),
+                    if (canViewInventory)
                       _MenuCard(
                         'المخازن',
                         Icons.inventory,
@@ -494,11 +519,13 @@ class DashboardScreen extends StatelessWidget {
                           Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (_) => const InventoryItemsScreen(),
+                              builder: (_) =>
+                                  const InventoryItemsScreen(),
                             ),
                           );
                         },
                       ),
+                    if (canViewInventory)
                       _MenuCard(
                         'حركات المخزون',
                         Icons.swap_horiz,
@@ -512,6 +539,7 @@ class DashboardScreen extends StatelessWidget {
                           );
                         },
                       ),
+                    if (canViewFarm)
                       _MenuCard(
                         'دورات التسمين',
                         Icons.agriculture,
@@ -519,11 +547,13 @@ class DashboardScreen extends StatelessWidget {
                           Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (_) => const FatteningCyclesScreen(),
+                              builder: (_) =>
+                                  const FatteningCyclesScreen(),
                             ),
                           );
                         },
                       ),
+                    if (canViewFarm)
                       _MenuCard(
                         'لوحة مؤشرات التسمين',
                         Icons.insights,
@@ -531,11 +561,13 @@ class DashboardScreen extends StatelessWidget {
                           Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (_) => const CycleIndicatorsScreen(),
+                              builder: (_) =>
+                                  const CycleIndicatorsScreen(),
                             ),
                           );
                         },
                       ),
+                    if (canViewAccounting)
                       _MenuCard(
                         'الأصول',
                         Icons.business,
@@ -548,6 +580,7 @@ class DashboardScreen extends StatelessWidget {
                           );
                         },
                       ),
+                    if (isAdmin)
                       _MenuCard(
                         'إعدادات النظام',
                         Icons.settings,
@@ -575,6 +608,7 @@ class DashboardScreen extends StatelessWidget {
                           );
                         },
                       ),
+                    if (canViewReports)
                       _MenuCard(
                         'التقارير',
                         Icons.bar_chart,
@@ -582,11 +616,13 @@ class DashboardScreen extends StatelessWidget {
                           Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (_) => const ReportsCenterScreen(),
+                              builder: (_) =>
+                                  const ReportsCenterScreen(),
                             ),
                           );
                         },
                       ),
+                    if (canViewAlerts)
                       _MenuCard(
                         'التنبيهات الذكية',
                         Icons.notifications_active,
@@ -594,7 +630,8 @@ class DashboardScreen extends StatelessWidget {
                           Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (_) => const AlertsCenterScreen(),
+                              builder: (_) =>
+                                  const AlertsCenterScreen(),
                             ),
                           );
                         },
