@@ -1,1 +1,37 @@
-{"flutter":{"platforms":{"android":{"default":{"projectId":"poultryerp-2af23","appId":"1:190804428130:android:e58ef6a0ae9f53fcc8583b","fileOutput":"android/app/google-services.json"}},"dart":{"lib/firebase_options.dart":{"projectId":"poultryerp-2af23","configurations":{"android":"1:190804428130:android:e58ef6a0ae9f53fcc8583b","web":"1:190804428130:web:bf1b76bb0187c6a9c8583b","windows":"1:190804428130:web:1ca383bc4ecabf10c8583b"}}}}}}
+{
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "poultryerp-2af23",
+          "appId": "1:190804428130:android:e58ef6a0ae9f53fcc8583b",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "poultryerp-2af23",
+          "configurations": {
+            "android": "1:190804428130:android:e58ef6a0ae9f53fcc8583b",
+            "web": "1:190804428130:web:bf1b76bb0187c6a9c8583b",
+            "windows": "1:190804428130:web:1ca383bc4ecabf10c8583b"
+          }
+        }
+      }
+    }
+  },
+  "hosting": {
+    "public": "build/web",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ],
+    "rewrites": [
+      {
+        "source": "**",
+        "destination": "/index.html"
+      }
+    ]
+  }
+}
