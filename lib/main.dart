@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
-import 'screens/dashboard_screen.dart';
+import 'screens/auth_gate_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -26,7 +26,7 @@ class PoultryERPApp extends StatelessWidget {
           seedColor: Colors.blue,
         ),
       ),
-      home: const DashboardScreen(),
+      home: const AuthGateScreen(),
     );
   }
 }

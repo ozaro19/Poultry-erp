@@ -15,6 +15,7 @@ import 'reports_center_screen.dart';
 import 'alerts_center_screen.dart';
 import 'assets_screen.dart';
 import 'capital_screen.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 class DashboardScreen extends StatelessWidget {
   const DashboardScreen({super.key});
@@ -269,6 +270,15 @@ class DashboardScreen extends StatelessWidget {
       child: Scaffold(
         appBar: AppBar(
           title: const Text('نظام إدارة مزارع الدواجن'),
+          actions: [
+            IconButton(
+              tooltip: 'تسجيل الخروج',
+              icon: const Icon(Icons.logout),
+              onPressed: () async {
+                await FirebaseAuth.instance.signOut();
+              },
+            ),
+          ],
         ),
         body: FutureBuilder<Map<String, dynamic>>(
           future: _loadDashboardData(),
