@@ -313,6 +313,7 @@ class _LoginScreenState extends State<LoginScreen> {
       final pendingSnapshot = await FirebaseFirestore.instance
           .collection('users')
           .where('email', isEqualTo: email)
+          .where('status', isEqualTo: 'pending')
           .limit(1)
           .get();
 
