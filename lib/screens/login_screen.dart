@@ -27,25 +27,53 @@ class _LoginScreenState extends State<LoginScreen> {
     required User user,
     required String defaultRole,
   }) async {
-    final userRef =
-        FirebaseFirestore.instance.collection('users').doc(user.uid);
+    final usersCollection = FirebaseFirestore.instance.collection('users');
+
+    final userRef = usersCollection.doc(user.uid);
 
     final userDocument = await userRef.get();
 
+    final email = user.email ?? '';
+
     if (!userDocument.exists) {
+      DocumentSnapshot<Map<String, dynamic>>? pendingUserDocument;
+
+      if (email.isNotEmpty) {
+        final pendingSnapshot = await usersCollection
+            .where('email', isEqualTo: email)
+            .limit(1)
+            .get();
+
+        if (pendingSnapshot.docs.isNotEmpty) {
+          pendingUserDocument = pendingSnapshot.docs.first;
+        }
+      }
+
+      final pendingData = pendingUserDocument?.data();
+
+      final role = (pendingData?['role'] ?? defaultRole).toString();
+      final isActive = pendingData?['isActive'] != false;
+
       await userRef.set({
         'uid': user.uid,
-        'email': user.email ?? '',
+        'email': email,
         'displayName': user.displayName ?? '',
-        'role': defaultRole,
-        'isActive': true,
-        'createdAt': Timestamp.now(),
+        'role': role,
+        'isActive': isActive,
+        'status': 'active',
+        'createdAt': pendingData?['createdAt'] ?? Timestamp.now(),
         'lastLoginAt': Timestamp.now(),
       });
+
+      if (pendingUserDocument != null &&
+          pendingUserDocument.id != user.uid) {
+        await usersCollection.doc(pendingUserDocument.id).delete();
+      }
     } else {
       await userRef.set(
         {
-          'email': user.email ?? '',
+          'email': email,
+          'status': 'active',
           'lastLoginAt': Timestamp.now(),
         },
         SetOptions(merge: true),

@@ -16,6 +16,7 @@ import 'alerts_center_screen.dart';
 import 'assets_screen.dart';
 import 'capital_screen.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'users_management_screen.dart';
 
 class DashboardScreen extends StatelessWidget {
   const DashboardScreen({super.key});
@@ -245,6 +246,21 @@ class DashboardScreen extends StatelessWidget {
       }
     }
 
+    String currentRole = 'viewer';
+
+    final currentUser = FirebaseAuth.instance.currentUser;
+
+    if (currentUser != null) {
+      final userDocument = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(currentUser.uid)
+          .get();
+
+      final userData = userDocument.data();
+
+      currentRole = (userData?['role'] ?? 'viewer').toString();
+    }
+
     return {
       'activeCycles': activeCycles,
       'closedCycles': closedCycles,
@@ -253,6 +269,7 @@ class DashboardScreen extends StatelessWidget {
       'netResult': netResult,
       'lowStockCount': lowStockCount,
       'alertsCount': alertsCount,
+      'currentRole': currentRole,
     };
   }
     @override
@@ -303,6 +320,10 @@ class DashboardScreen extends StatelessWidget {
             final netResult = _toDouble(data['netResult']);
             final lowStockCount = data['lowStockCount'] ?? 0;
             final alertsCount = data['alertsCount'] ?? 0;
+            final currentRole =
+                (data['currentRole'] ?? 'viewer').toString();
+
+            final isAdmin = currentRole == 'admin';
 
             return SingleChildScrollView(
               padding: const EdgeInsets.all(16),
@@ -536,6 +557,20 @@ class DashboardScreen extends StatelessWidget {
                             MaterialPageRoute(
                               builder: (_) =>
                                   const SystemSettingsScreen(),
+                            ),
+                          );
+                        },
+                      ),
+                    if (isAdmin)
+                      _MenuCard(
+                        'المستخدمون والصلاحيات',
+                        Icons.manage_accounts,
+                        () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) =>
+                                  const UsersManagementScreen(),
                             ),
                           );
                         },
