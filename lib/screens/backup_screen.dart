@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:file_saver/file_saver.dart';
 import 'package:flutter/material.dart';
 
@@ -14,6 +15,11 @@ class BackupScreen extends StatefulWidget {
 
 class _BackupScreenState extends State<BackupScreen> {
   bool isExporting = false;
+  bool isReadingBackup = false;
+
+  Map<String, dynamic>? selectedBackupData;
+  String? selectedBackupFileName;
+  String? selectedBackupError;
 
   final List<String> collectionNames = const [
     'users',
@@ -163,6 +169,128 @@ class _BackupScreenState extends State<BackupScreen> {
     }
   }
 
+  int _safeCount(dynamic value) {
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    return 0;
+  }
+
+  List<Map<String, dynamic>> get previewCollections {
+    final backupData = selectedBackupData;
+    if (backupData == null) return [];
+
+    final collections = backupData['collections'];
+    if (collections is! List) return [];
+
+    return collections
+        .whereType<Map>()
+        .map((item) => Map<String, dynamic>.from(item))
+        .toList();
+  }
+
+  int get previewTotalDocuments {
+    var total = 0;
+
+    for (final collection in previewCollections) {
+      final count = collection['count'];
+      if (count is int || count is num) {
+        total += _safeCount(count);
+      } else {
+        final documents = collection['documents'];
+        if (documents is List) {
+          total += documents.length;
+        }
+      }
+    }
+
+    return total;
+  }
+
+  Future<void> _pickAndPreviewBackup() async {
+    setState(() {
+      isReadingBackup = true;
+      selectedBackupError = null;
+    });
+
+    try {
+      final result = await FilePicker.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['json'],
+        withData: true,
+      );
+
+      if (result == null || result.files.isEmpty) {
+        return;
+      }
+
+      final file = result.files.single;
+      final bytes = file.bytes;
+
+      if (bytes == null) {
+        throw Exception('لم أستطع قراءة الملف. جربي اختيار الملف مرة أخرى.');
+      }
+
+      final jsonText = utf8.decode(bytes);
+      final decoded = jsonDecode(jsonText);
+
+      if (decoded is! Map) {
+        throw Exception('هذا الملف ليس نسخة احتياطية صحيحة.');
+      }
+
+      final backupMap = Map<String, dynamic>.from(decoded);
+
+      if (backupMap['appName'] != 'Poultry ERP') {
+        throw Exception('هذا الملف لا يبدو أنه خاص بنظام Poultry ERP.');
+      }
+
+      if (backupMap['collections'] is! List) {
+        throw Exception('ملف النسخة الاحتياطية لا يحتوي على بيانات المجموعات.');
+      }
+
+      setState(() {
+        selectedBackupData = backupMap;
+        selectedBackupFileName = file.name;
+        selectedBackupError = null;
+      });
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('تم فحص ملف النسخة الاحتياطية بنجاح'),
+        ),
+      );
+    } catch (error) {
+      setState(() {
+        selectedBackupData = null;
+        selectedBackupFileName = null;
+        selectedBackupError = error.toString();
+      });
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('حدث خطأ أثناء فحص الملف: $error'),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          isReadingBackup = false;
+        });
+      }
+    }
+  }
+
+  void _clearPreview() {
+    setState(() {
+      selectedBackupData = null;
+      selectedBackupFileName = null;
+      selectedBackupError = null;
+    });
+  }
+
   Widget _buildInfoCard({
     required String title,
     required String value,
@@ -231,10 +359,18 @@ class _BackupScreenState extends State<BackupScreen> {
     );
   }
 
-  Widget _buildContent() {
+  Widget _buildExportSection() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        const Text(
+          'تصدير نسخة احتياطية',
+          style: TextStyle(
+            fontSize: 22,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        const SizedBox(height: 14),
         Wrap(
           spacing: 12,
           runSpacing: 12,
@@ -259,7 +395,7 @@ class _BackupScreenState extends State<BackupScreen> {
             ),
           ],
         ),
-        const SizedBox(height: 24),
+        const SizedBox(height: 20),
         Card(
           color: Colors.orange.shade50,
           child: const Padding(
@@ -317,6 +453,183 @@ class _BackupScreenState extends State<BackupScreen> {
     );
   }
 
+  Widget _buildPreviewSection() {
+    final backupData = selectedBackupData;
+    final createdAt = backupData?['createdAt']?.toString() ?? 'غير محدد';
+    final backupVersion =
+        backupData?['backupVersion']?.toString() ?? 'غير محدد';
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'فحص ملف نسخة احتياطية',
+          style: TextStyle(
+            fontSize: 22,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          'اختاري ملف JSON تم تصديره سابقًا من النظام لعرض محتواه بدون استعادة.',
+          style: TextStyle(
+            color: Colors.grey.shade700,
+          ),
+        ),
+        const SizedBox(height: 14),
+        Wrap(
+          spacing: 12,
+          runSpacing: 12,
+          children: [
+            SizedBox(
+              width: 280,
+              child: ElevatedButton.icon(
+                onPressed: isReadingBackup ? null : _pickAndPreviewBackup,
+                icon: isReadingBackup
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.upload_file),
+                label: Text(
+                  isReadingBackup
+                      ? 'جاري فحص الملف...'
+                      : 'اختيار وفحص ملف JSON',
+                ),
+              ),
+            ),
+            if (backupData != null)
+              SizedBox(
+                width: 180,
+                child: OutlinedButton.icon(
+                  onPressed: _clearPreview,
+                  icon: const Icon(Icons.clear),
+                  label: const Text('مسح الفحص'),
+                ),
+              ),
+          ],
+        ),
+        if (selectedBackupError != null) ...[
+          const SizedBox(height: 14),
+          Card(
+            color: Colors.red.shade50,
+            child: Padding(
+              padding: const EdgeInsets.all(14),
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.error,
+                    color: Colors.red,
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      selectedBackupError!,
+                      style: const TextStyle(
+                        color: Colors.red,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+        if (backupData != null) ...[
+          const SizedBox(height: 20),
+          Card(
+            color: Colors.green.shade50,
+            child: Padding(
+              padding: const EdgeInsets.all(14),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Row(
+                    children: [
+                      Icon(
+                        Icons.verified,
+                        color: Colors.green,
+                      ),
+                      SizedBox(width: 10),
+                      Text(
+                        'تم قراءة النسخة الاحتياطية بنجاح',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.green,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+                  Text('اسم الملف: ${selectedBackupFileName ?? 'غير محدد'}'),
+                  Text('إصدار النسخة: $backupVersion'),
+                  Text('تاريخ إنشاء النسخة: $createdAt'),
+                  Text('عدد المجموعات: ${previewCollections.length}'),
+                  Text('إجمالي السجلات: $previewTotalDocuments'),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 18),
+          const Text(
+            'تفاصيل المجموعات داخل الملف',
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 10),
+          ...previewCollections.map((collection) {
+            final name = collection['collection']?.toString() ?? 'غير معروف';
+            final count = _safeCount(collection['count']);
+
+            return Card(
+              child: ListTile(
+                leading: const CircleAvatar(
+                  child: Icon(Icons.folder_copy),
+                ),
+                title: Text(
+                  name,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                subtitle: Text('عدد السجلات داخل هذه المجموعة: $count'),
+              ),
+            );
+          }),
+          const SizedBox(height: 14),
+          Card(
+            color: Colors.blue.shade50,
+            child: const Padding(
+              padding: EdgeInsets.all(14),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.lock,
+                    color: Colors.blue,
+                  ),
+                  SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'هذا فحص فقط. لم يتم استعادة أو تعديل أي بيانات.',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Directionality(
@@ -342,14 +655,18 @@ class _BackupScreenState extends State<BackupScreen> {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'قم بتصدير نسخة كاملة من بيانات النظام في ملف JSON آمن للاحتفاظ به.',
+                    'قم بتصدير نسخة كاملة من بيانات النظام أو فحص ملف نسخة احتياطية سابق.',
                     style: TextStyle(
                       color: Colors.grey.shade700,
                       fontSize: 15,
                     ),
                   ),
                   const SizedBox(height: 24),
-                  _buildContent(),
+                  _buildExportSection(),
+                  const SizedBox(height: 36),
+                  const Divider(),
+                  const SizedBox(height: 24),
+                  _buildPreviewSection(),
                 ],
               ),
             ),
