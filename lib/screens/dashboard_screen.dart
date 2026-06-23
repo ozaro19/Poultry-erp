@@ -19,6 +19,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'users_management_screen.dart';
 import 'backup_screen.dart';
 import 'audit_logs_screen.dart';
+import '../services/audit_log_service.dart';
 
 class DashboardScreen extends StatelessWidget {
   const DashboardScreen({super.key});
@@ -294,7 +295,13 @@ class DashboardScreen extends StatelessWidget {
               tooltip: 'تسجيل الخروج',
               icon: const Icon(Icons.logout),
               onPressed: () async {
-                await FirebaseAuth.instance.signOut();
+                await AuditLogService.log(
+                  action: 'logout',
+                  category: 'auth',
+                  description: 'تم تسجيل خروج المستخدم',
+                );
+
+await FirebaseAuth.instance.signOut();
               },
             ),
           ],

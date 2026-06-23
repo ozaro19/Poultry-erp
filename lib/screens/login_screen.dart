@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../services/audit_log_service.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -159,6 +160,15 @@ class _LoginScreenState extends State<LoginScreen> {
       final credential = await FirebaseAuth.instance.signInWithEmailAndPassword(
         email: email,
         password: password,
+      );
+
+      await AuditLogService.log(
+        action: 'login',
+        category: 'auth',
+        description: 'تم تسجيل دخول المستخدم',
+        metadata: {
+          'method': 'email_password',
+        },
       );
 
       final user = credential.user;
