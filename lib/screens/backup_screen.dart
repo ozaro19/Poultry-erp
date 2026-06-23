@@ -5,6 +5,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:file_saver/file_saver.dart';
 import 'package:flutter/material.dart';
+import '../services/audit_log_service.dart';
 
 class BackupScreen extends StatefulWidget {
   const BackupScreen({super.key});
@@ -145,6 +146,20 @@ class _BackupScreenState extends State<BackupScreen> {
         mimeType: MimeType.other,
       );
 
+      await AuditLogService.log(
+        action: 'backup_export',
+        category: 'backup',
+        description: 'تم تصدير نسخة احتياطية للنظام',
+        metadata: {
+          'fileName': '$fileName.json',
+          'collectionsCount': backupCollections.length,
+          'totalRecords': backupCollections.fold<int>(
+            0,
+            (total, collection) => total + _safeCount(collection['count']),
+          ),
+        },
+      );
+
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
@@ -252,6 +267,17 @@ class _BackupScreenState extends State<BackupScreen> {
         selectedBackupFileName = file.name;
         selectedBackupError = null;
       });
+
+      await AuditLogService.log(
+        action: 'backup_preview',
+        category: 'backup',
+        description: 'تم فحص ملف نسخة احتياطية بدون استعادة',
+        metadata: {
+          'fileName': file.name,
+          'collectionsCount': previewCollections.length,
+          'totalRecords': previewTotalDocuments,
+        },
+      );
 
       if (!mounted) return;
 

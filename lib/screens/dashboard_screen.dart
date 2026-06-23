@@ -18,6 +18,7 @@ import 'capital_screen.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'users_management_screen.dart';
 import 'backup_screen.dart';
+import 'audit_logs_screen.dart';
 
 class DashboardScreen extends StatelessWidget {
   const DashboardScreen({super.key});
@@ -618,6 +619,19 @@ class DashboardScreen extends StatelessWidget {
                             context,
                             MaterialPageRoute(
                               builder: (_) => const BackupScreen(),
+                            ),
+                          );
+                        },
+                      ),
+                    if (isAdmin)
+                      _MenuCard(
+                        'سجل العمليات',
+                        Icons.history,
+                        () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const AuditLogsScreen(),
                             ),
                           );
                         },
